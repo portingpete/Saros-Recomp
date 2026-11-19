@@ -1,0 +1,47 @@
+{
+  "milestones": [
+    {
+      "date": "2026-11-19",
+      "average_fps": 20.081305723894392,
+      "routes": [
+        {
+          "name": "Open-floor circle",
+          "frames": 611,
+          "seconds": 30.0056684,
+          "fps": 20.362819179858697,
+          "p95_ms": 66.44605,
+          "minimum_travel_units": 2175.2351341609474
+        },
+        {
+          "name": "Wide turn after forward run",
+          "frames": 594,
+          "seconds": 30.0003898,
+          "fps": 19.799742735342726,
+          "p95_ms": 71.2908,
+          "minimum_travel_units": 4967.368495172344
+        }
+      ],
+      "render_size": [
+        2560,
+        1440
+      ],
+      "render_scale_percent": 100,
+      "device": "NVIDIA GeForce RTX 5080",
+      "cpu": "Intel Core i9-14900K",
+      "game_sha256": "6bd1ce70dea706e606aa49133166cd523e6317d559e71dbfa3d9e0117303f0b4",
+      "driver_sha256": "7b1d191c8ad9179ab3dfa4e765761c6c4a805a6b120ae4acc270c7ae7d5655f9",
+      "display_note": "The game rendered at 2560 \u00d7 1440 with 100% internal scale. Windows presented this run on a 1920 \u00d7 1080 borderless desktop. The eight-second recording was captured at 8 FPS.",
+      "capture": {
+        "width": 768,
+        "height": 432,
+        "r_frame_rate": "8/1",
+        "duration": "8.000000"
+      },
+      "runtime_exit": "0x00000000",
+      "renderer_options": {
+        "KYTY_FAST_TLS": "1"
+      },
+      "recording_sha256": "69080776c07aa3c148e457199a551fee81c3e7dae20cdb4e9f168ceac1654069"
+    }
+  ]
+}
