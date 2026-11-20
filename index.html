@@ -19,12 +19,12 @@
     <div class="stage">
       <figure><video controls autoplay muted loop playsinline preload="auto" poster="media/prologue.jpg" aria-label="Saros prologue gameplay with the player sprinting in circles as the camera turns"><source src="media/prologue.mp4" type="video/mp4"></video>
       <figcaption><span><i></i> Prologue movement</span><a href="media/prologue.mp4">Open recording ↗</a></figcaption></figure>
-      <aside aria-label="Current movement benchmark"><p class="kicker">Movement average</p><p class="metric"><strong id="fps">—</strong> <span>FPS</span></p><p class="resolution">2560 × 1440</p><p class="details">Native render resolution<br>RTX 5080 · Core i9-14900K</p><div class="target"><div class="scale"><b id="bar"></b></div><div class="scale-label"><span>0</span><span>120 FPS goal</span></div></div><a class="method" href="#benchmark">View frame timings ↓</a></aside>
+      <aside aria-label="Current movement benchmark"><p id="preset" class="kicker">Movement average</p><p class="metric"><strong id="fps">—</strong> <span>FPS</span></p><p class="resolution">2560 × 1440</p><p class="details">Native render resolution<br>RTX 5080 · Core i9-14900K</p><div class="target"><div class="scale"><b id="bar"></b></div><div class="scale-label"><span>0</span><span>120 FPS goal</span></div></div><a class="method" href="#benchmark">View frame timings ↓</a></aside>
     </div>
     <section id="benchmark" aria-labelledby="bench-title"><div class="section-title"><h2 id="bench-title">Prologue benchmark</h2><time id="date"></time></div>
     <p>Terra held sprint, steered the character in circles, and turned the camera at the same time. Each route ran for 30 seconds. The average counts every completed game frame across both runs, including stalls. The recording is a separate movement pass.</p>
     <div class="table-wrap"><table><thead><tr><th>Movement route</th><th>Frames</th><th>Average FPS</th><th>95th percentile frame time</th></tr></thead><tbody id="routes"></tbody></table></div>
-    <p id="display" class="note"></p><p id="milestone" class="note"></p>
+    <p id="comparison" class="note"></p><p id="display" class="note"></p><p id="milestone" class="note"></p>
     <noscript><p>Read the frame counts, elapsed times and resolution in the benchmark data below.</p></noscript></section>
   </main>
   <footer><div class="wrap bottom"><span>Saros on Windows</span><div><a href="benchmarks.json">Benchmark data</a><a href="https://github.com/boykopovar/AnyPS5">AnyPS5 ↗</a></div></div></footer>

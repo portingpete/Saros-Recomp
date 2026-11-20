@@ -6,6 +6,7 @@ async function showBenchmark() {
   const {milestones} = await response.json();
   const latest = milestones[milestones.length - 1];
   document.querySelector("#fps").textContent = latest.average_fps.toFixed(1);
+  document.querySelector("#preset").textContent = latest.preset || "Movement average";
   document.querySelector("#bar").style.width = Math.min(100, latest.average_fps / 120 * 100) + "%";
   const date = document.querySelector("#date");
   date.dateTime = latest.date;
@@ -18,6 +19,7 @@ async function showBenchmark() {
     }
   }
   document.querySelector("#display").textContent = latest.display_note;
+  document.querySelector("#comparison").textContent = latest.comparison_note || "";
   document.querySelector("#milestone").textContent = "Next movement milestone: " + (latest.average_fps + 10).toFixed(1) + " FPS.";
 }
 showBenchmark().catch(() => {

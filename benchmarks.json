@@ -42,6 +42,60 @@
         "KYTY_FAST_TLS": "1"
       },
       "recording_sha256": "69080776c07aa3c148e457199a551fee81c3e7dae20cdb4e9f168ceac1654069"
+    },
+    {
+      "date": "2026-11-20",
+      "preset": "Reduced lighting and effects",
+      "average_fps": 30.962269663148017,
+      "routes": [
+        {
+          "name": "Tight sprint circle",
+          "frames": 925,
+          "seconds": 30.0047226,
+          "fps": 30.82848031396231,
+          "p95_ms": 41.62524499999999,
+          "minimum_travel_units": 1254.0326228149
+        },
+        {
+          "name": "Wide sprint circle",
+          "frames": 933,
+          "seconds": 30.0037981,
+          "fps": 31.096063134753596,
+          "p95_ms": 42.7024,
+          "minimum_travel_units": 2629.9646299206674
+        }
+      ],
+      "render_size": [
+        2560,
+        1440
+      ],
+      "render_scale_percent": 100,
+      "refresh_hz": 120,
+      "device": "NVIDIA GeForce RTX 5080",
+      "cpu": "Intel Core i9-14900K",
+      "game_sha256": "6bd1ce70dea706e606aa49133166cd523e6317d559e71dbfa3d9e0117303f0b4",
+      "driver_sha256": "04f7bb0c500bc9b613310f6a49df1a70d74bb614de4f57e7df120985ca742dd4",
+      "settings": {
+        "sg.ShadowQuality": 1,
+        "sg.GlobalIlluminationQuality": 1,
+        "sg.ReflectionQuality": 1,
+        "sg.EffectsQuality": 1
+      },
+      "comparison_note": "With stock shadows, global illumination, reflections, and effects, the same build averaged 27.26 FPS. Lowering these four settings from level 3 to level 1 changed the lighting and raised the average by 3.70 FPS.",
+      "matched_stock_fps": 27.26086564532689,
+      "matched_stock_routes": {
+        "tight": 26.6963298775562,
+        "wide": 27.825316395924393
+      },
+      "display_note": "Both runs rendered at 2560 \u00d7 1440 at 100% scale on a 120 Hz display. Windows PresentMon independently counted all 1,858 game frames in the reduced-quality run. The separate movement clip was captured at 30 FPS.",
+      "capture": {
+        "width": 1920,
+        "height": 1080,
+        "r_frame_rate": "30/1",
+        "duration": "5.066667"
+      },
+      "runtime_exit": "0x00000000",
+      "recording_sha256": "9c5b67e87ddd31923378c37da9f67c6dbe27ea7ed51b675dd3c17af2e5f0ab76"
     }
   ]
 }
