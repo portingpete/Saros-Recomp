@@ -81,7 +81,7 @@
         "sg.ReflectionQuality": 1,
         "sg.EffectsQuality": 1
       },
-      "comparison_note": "With stock shadows, global illumination, reflections, and effects, the same build averaged 27.26 FPS. Lowering these four settings from level 3 to level 1 changed the lighting and raised the average by 3.70 FPS.",
+      "comparison_note": "With stock shadows, global illumination, reflections, and effects, the same build averaged 27.26 FPS. Lowering these four settings from level 3 to level 1 changed the lighting and raised the average by 3.70 FPS. The Windows performance launcher averaged 29.01 FPS in a separate repeat. An earlier launch stopped during the tight sprint after a GPU error.",
       "matched_stock_fps": 27.26086564532689,
       "matched_stock_routes": {
         "tight": 26.6963298775562,
@@ -95,7 +95,28 @@
         "duration": "5.066667"
       },
       "runtime_exit": "0x00000000",
-      "recording_sha256": "9c5b67e87ddd31923378c37da9f67c6dbe27ea7ed51b675dd3c17af2e5f0ab76"
+      "recording_sha256": "9c5b67e87ddd31923378c37da9f67c6dbe27ea7ed51b675dd3c17af2e5f0ab76",
+      "launcher_repeat": {
+        "profile": "Reduced lighting and effects",
+        "average_fps": 29.013028674646105,
+        "p95_ms": 45.35587,
+        "routes": {
+          "tight": {
+            "guest_full_window_fps": 28.194325610027725,
+            "raw_flip_count": 846,
+            "duration_s": 30.0060378,
+            "p95_ms": 46.78806
+          },
+          "wide": {
+            "guest_full_window_fps": 29.831855960386655,
+            "raw_flip_count": 895,
+            "duration_s": 30.0014857,
+            "p95_ms": 43.85841500000001
+          }
+        },
+        "previous_run": "Vulkan device loss during tight sprint",
+        "clean_exit_on_repeat": true
+      }
     }
   ]
 }
