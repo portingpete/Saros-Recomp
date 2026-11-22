@@ -15,10 +15,8 @@
   "internal_render_percent": 100,
   "guest_profile": "SarosNativeFXAA",
   "guest_interpolation": false,
-  "optical_multiplier": 4,
   "optical_flow_scale": 0.75,
   "lossless_dll_sha256": "626b196d799606cd4250b7b29e04228692ab70cf56a5d1bbb56d748c8219f0eb",
-  "renderer_sha256": "ae88b5a68da4cc9c95653d08c3b85d3aa17de398766688fd7cb269ccef53ac0c",
   "routes": [
     {
       "variant": "unpaced",
@@ -46,7 +44,11 @@
         "-1": 194,
         "0": 259,
         "2": 372
-      }
+      },
+      "optical_multiplier": 4,
+      "target_output_hz": null,
+      "renderer_sha256": "ae88b5a68da4cc9c95653d08c3b85d3aa17de398766688fd7cb269ccef53ac0c",
+      "positive_stage_reports": 1231
     },
     {
       "variant": "unpaced",
@@ -74,7 +76,11 @@
         "2": 389,
         "-1": 272,
         "0": 173
-      }
+      },
+      "optical_multiplier": 4,
+      "target_output_hz": null,
+      "renderer_sha256": "ae88b5a68da4cc9c95653d08c3b85d3aa17de398766688fd7cb269ccef53ac0c",
+      "positive_stage_reports": 1102
     },
     {
       "variant": "driver_relative_120",
@@ -102,7 +108,11 @@
         "-1": 290,
         "1": 109,
         "2": 77
-      }
+      },
+      "optical_multiplier": 4,
+      "target_output_hz": 120,
+      "renderer_sha256": "ae88b5a68da4cc9c95653d08c3b85d3aa17de398766688fd7cb269ccef53ac0c",
+      "positive_stage_reports": 995
     },
     {
       "variant": "driver_relative_120",
@@ -130,7 +140,11 @@
         "0": 383,
         "-1": 179,
         "2": 140
-      }
+      },
+      "optical_multiplier": 4,
+      "target_output_hz": 120,
+      "renderer_sha256": "ae88b5a68da4cc9c95653d08c3b85d3aa17de398766688fd7cb269ccef53ac0c",
+      "positive_stage_reports": 954
     },
     {
       "variant": "paced_queue_120",
@@ -158,7 +172,11 @@
         "2": 351,
         "-1": 467,
         "1": 445
-      }
+      },
+      "optical_multiplier": 4,
+      "target_output_hz": 120,
+      "renderer_sha256": "ae88b5a68da4cc9c95653d08c3b85d3aa17de398766688fd7cb269ccef53ac0c",
+      "positive_stage_reports": 1703
     },
     {
       "variant": "paced_queue_120",
@@ -186,7 +204,11 @@
         "1": 467,
         "2": 348,
         "-1": 462
-      }
+      },
+      "optical_multiplier": 4,
+      "target_output_hz": 120,
+      "renderer_sha256": "ae88b5a68da4cc9c95653d08c3b85d3aa17de398766688fd7cb269ccef53ac0c",
+      "positive_stage_reports": 1703
     },
     {
       "variant": "two_pending_120",
@@ -214,7 +236,11 @@
         "0": 765,
         "1": 709,
         "-1": 575
-      }
+      },
+      "optical_multiplier": 4,
+      "target_output_hz": 120,
+      "renderer_sha256": "ae88b5a68da4cc9c95653d08c3b85d3aa17de398766688fd7cb269ccef53ac0c",
+      "positive_stage_reports": 2535
     },
     {
       "variant": "two_pending_120",
@@ -242,7 +268,147 @@
         "0": 706,
         "1": 603,
         "2": 500
-      }
+      },
+      "optical_multiplier": 4,
+      "target_output_hz": 120,
+      "renderer_sha256": "ae88b5a68da4cc9c95653d08c3b85d3aa17de398766688fd7cb269ccef53ac0c",
+      "positive_stage_reports": 2401
+    },
+    {
+      "variant": "gpu_ready_two_pending_180",
+      "route": "seed_circle",
+      "duration_ns": 30035993600,
+      "world_units": 1197.284,
+      "exit_code": 0,
+      "engine_ticks": 692,
+      "engine_sample_interval_ns": 29863458400,
+      "engine_fps": 23.172,
+      "guest_flips_per_s": 23.1389,
+      "vulkan_presents_per_s": 138.833,
+      "vulkan_originals": 695,
+      "generated_presents": 3475,
+      "complete_stage_reports": 4170,
+      "positive_distinct": 2906,
+      "zero_stage_reports": 1264,
+      "scanout_fps": 96.751,
+      "first_to_last_scanout_fps": 96.812,
+      "median_scanout_ms": 8.334,
+      "p95_scanout_ms": 22.223,
+      "longest_scanout_ms": 33.3356,
+      "positive_by_generated_index": {
+        "-1": 394,
+        "0": 618,
+        "1": 608,
+        "2": 669,
+        "3": 330,
+        "4": 287
+      },
+      "optical_multiplier": 6,
+      "target_output_hz": 180,
+      "renderer_sha256": "ae88b5a68da4cc9c95653d08c3b85d3aa17de398766688fd7cb269ccef53ac0c",
+      "positive_stage_reports": 2906
+    },
+    {
+      "variant": "gpu_ready_two_pending_180",
+      "route": "circle_camera",
+      "duration_ns": 30032986300,
+      "world_units": 4534.385,
+      "exit_code": 0,
+      "engine_ticks": 643,
+      "engine_sample_interval_ns": 29975065050,
+      "engine_fps": 21.451,
+      "guest_flips_per_s": 21.4431,
+      "vulkan_presents_per_s": 128.659,
+      "vulkan_originals": 644,
+      "generated_presents": 3220,
+      "complete_stage_reports": 3864,
+      "positive_distinct": 2626,
+      "zero_stage_reports": 1238,
+      "scanout_fps": 87.437,
+      "first_to_last_scanout_fps": 87.456,
+      "median_scanout_ms": 8.334,
+      "p95_scanout_ms": 22.224,
+      "longest_scanout_ms": 152.7862,
+      "positive_by_generated_index": {
+        "-1": 381,
+        "0": 572,
+        "1": 566,
+        "2": 591,
+        "3": 257,
+        "4": 259
+      },
+      "optical_multiplier": 6,
+      "target_output_hz": 180,
+      "renderer_sha256": "ae88b5a68da4cc9c95653d08c3b85d3aa17de398766688fd7cb269ccef53ac0c",
+      "positive_stage_reports": 2626
+    },
+    {
+      "variant": "four_pending_180",
+      "route": "seed_circle",
+      "duration_ns": 30007463500,
+      "world_units": 1191.056,
+      "exit_code": 0,
+      "engine_ticks": 870,
+      "engine_sample_interval_ns": 29929668350,
+      "engine_fps": 29.068,
+      "guest_flips_per_s": 29.0261,
+      "vulkan_presents_per_s": 174.157,
+      "vulkan_originals": 871,
+      "generated_presents": 4355,
+      "complete_stage_reports": 5226,
+      "positive_distinct": 3304,
+      "zero_stage_reports": 1921,
+      "scanout_fps": 110.106,
+      "first_to_last_scanout_fps": 110.147,
+      "median_scanout_ms": 8.334,
+      "p95_scanout_ms": 16.669,
+      "longest_scanout_ms": 41.6686,
+      "positive_by_generated_index": {
+        "2": 403,
+        "4": 507,
+        "-1": 591,
+        "0": 740,
+        "1": 653,
+        "3": 411
+      },
+      "optical_multiplier": 6,
+      "target_output_hz": 180,
+      "renderer_sha256": "b938cdd735e64cb6456fd37ba5ec62bcacddf41fc9bfab289113c3f3901a7da6",
+      "positive_stage_reports": 3305
+    },
+    {
+      "variant": "four_pending_180",
+      "route": "circle_camera",
+      "duration_ns": 30024627900,
+      "world_units": 3889.221,
+      "exit_code": 0,
+      "engine_ticks": 830,
+      "engine_sample_interval_ns": 29954495250,
+      "engine_fps": 27.709,
+      "guest_flips_per_s": 27.6773,
+      "vulkan_presents_per_s": 166.064,
+      "vulkan_originals": 831,
+      "generated_presents": 4155,
+      "complete_stage_reports": 4986,
+      "positive_distinct": 3257,
+      "zero_stage_reports": 1729,
+      "scanout_fps": 108.478,
+      "first_to_last_scanout_fps": 108.499,
+      "median_scanout_ms": 8.334,
+      "p95_scanout_ms": 19.445,
+      "longest_scanout_ms": 361.1258,
+      "positive_by_generated_index": {
+        "2": 448,
+        "3": 392,
+        "4": 460,
+        "-1": 596,
+        "0": 757,
+        "1": 604
+      },
+      "optical_multiplier": 6,
+      "target_output_hz": 180,
+      "renderer_sha256": "b938cdd735e64cb6456fd37ba5ec62bcacddf41fc9bfab289113c3f3901a7da6",
+      "positive_stage_reports": 3257
     }
   ],
   "scope": "Each route covers 30 seconds of simultaneous character movement and camera rotation from the prologue checkpoint on an isolated Windows desktop. Scanout counts distinct positive timestamps at VK_PRESENT_STAGE_IMAGE_FIRST_PIXEL_OUT_BIT_EXT. The visible-pixel stage was unavailable."

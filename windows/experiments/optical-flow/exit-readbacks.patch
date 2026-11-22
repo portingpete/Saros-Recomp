@@ -1,0 +1,29 @@
+--- a/core/libs/prx/libSceAgcDriver/KytyShim/src/EntryGpu.cpp
++++ b/core/libs/prx/libSceAgcDriver/KytyShim/src/EntryGpu.cpp
+@@ -267,9 +267,24 @@
+     }
+     std::exception_ptr failure;
+     auto* renderer = s.renderer.load(std::memory_order_acquire);
+-    auto thread = Libc::StartHostThread([&failure, renderer] {
++    // Guest threads can still read watched pages while libc drains process exit.
++    // StopGpu has closed submission admission. Drain issued work and keep the
++    // readback service alive until Windows terminates the remaining threads.
++    const bool exiting = LibcShutdownToken_nid_postfix().stop_requested();
++    auto thread = Libc::StartHostThread([&failure, renderer, exiting] {
+         try {
+-            renderer->ShutdownGpu();
++            if (exiting) {
++                auto& gpu = renderer->GetGpu();
++                gpu.WaitForIdle();
++                gpu.SendCommandSync([renderer] {
++                    auto& scheduler = renderer->GetCommandScheduler();
++                    if (scheduler.Active()) scheduler.Finish();
++                });
++                renderer->GetCommandScheduler().DrainPriorityOperations();
++                std::fputs("[kyty] exit drained; watched-page readbacks remain available\n", stderr);
++            } else {
++                renderer->ShutdownGpu();
++            }
+         } catch (...) {
+             failure = std::current_exception();
+         }

@@ -45,6 +45,8 @@ def main():
     parser.add_argument("--layer", required=True, type=windows_dll, help="Locally built lsfg-vk Windows layer")
     default = Path(os.environ.get("ProgramFiles(x86)", r"C:\Program Files (x86)")) / "Steam/steamapps/common/Lossless Scaling/Lossless.dll"
     parser.add_argument("--lossless-dll", type=windows_dll, default=str(default), help="Lossless.dll from your Steam installation")
+    parser.add_argument("--multiplier", type=int, choices=(4, 6, 8), default=6, help="Number of output images per input frame")
+    parser.add_argument("--output-hz", type=int, choices=range(30, 361), metavar="30-360", default=180, help="Target presentation cadence in Hz")
     parser.add_argument("--check", action="store_true", help="Verify launch inputs and exit")
     args = parser.parse_args()
     if os.name != "nt":
@@ -62,7 +64,7 @@ def main():
         f'dll = {json.dumps(args.lossless_dll.as_posix(), ensure_ascii=False)}\n'
         'allow_fp16 = true\n[[profile]]\n'
         f'name = "{PROFILE}"\n'
-        'active_in = ["Saros.exe"]\nmultiplier = 4\nflow_scale = 0.75\n'
+        f'active_in = ["Saros.exe"]\nmultiplier = {args.multiplier}\nflow_scale = 0.75\n'
         'performance_mode = true\npacing = "none"\n'
     )
     launcher = Path(__file__).resolve().parents[2] / "run_milestone.py"
@@ -77,11 +79,15 @@ def main():
         env.update(
             VK_LAYER_PATH=prepend(env.get("VK_LAYER_PATH", ""), directory),
             VK_INSTANCE_LAYERS=prepend(env.get("VK_INSTANCE_LAYERS", ""), NAME),
-            LSFGVK_CONFIG=str(config_path), LSFGVK_PROFILE=PROFILE,
+            LSFGVK_CONFIG=str(config_path), LSFGVK_PROFILE=PROFILE, LSFGVK_SAROS_OUTPUT_HZ=str(args.output_hz),
         )
         cmd = [sys.executable, "-B", str(launcher), "--play", str(args.play), "--profile", "native-fxaa"]
         if args.check:
-            if Path(tomllib.loads(config_path.read_text(encoding="utf-8"))["global"]["dll"]) != args.lossless_dll:
+            parsed = tomllib.loads(config_path.read_text(encoding="utf-8"))
+            if parsed["profile"][0]["multiplier"] != args.multiplier:
+                parser.error("Optical multiplier did not round-trip through TOML")
+            print(f"Configured {args.multiplier} output images per input frame at {args.output_hz} Hz", flush=True)
+            if Path(parsed["global"]["dll"]) != args.lossless_dll:
                 parser.error("Lossless Scaling DLL path did not round-trip through TOML")
             if Path(json.loads(manifest_path.read_bytes())["layer"]["library_path"]) != args.layer:
                 parser.error("Layer DLL path did not round-trip through JSON")

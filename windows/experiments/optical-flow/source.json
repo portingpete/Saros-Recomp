@@ -1,12 +1,14 @@
 {
   "upstream": "https://github.com/56TR/lsfg-vk-windows",
   "revision": "b03458e44eb5cc5a87537b3743f52617974e2389",
-  "patch_sha256": "b04ad5f98a9af807deb27252fd9cd193c5f11868f869ff650dc79dde91857645",
-  "measured_layer_sha256": "7d3229ec2543bea2f57e35e30ae1806c4ceb2b07fddb33747200e98124f23b20",
-  "separate_rebuild_sha256": "09109998b373052e220998ac834c4d4c1a0527b8719db224c95475d087a423e1",
+  "patch_sha256": "8f687d984501ab912f4bd5355d975c11037879e2905e6aa2211d9a863465269d",
+  "measured_layer_sha256": "dfdfb9775d86cf6f375d183da124071fcdbe3d1cda873d15855b4a96415884e9",
+  "separate_rebuild_sha256": "7275c8d8eb6599df73d079025e11424e474058765328b399ed29f79ade54e266",
   "vulkan_headers": 335,
   "architecture": "Windows x86-64",
   "rebuild": "clean pinned checkout and Windows Release link",
   "first_published_revision": "c0128ac2643120866d125518fb671802dc486e2e",
-  "capture_layer_sha256": "a90e2293be42df74fa5ab292654fe1284be7c4350052e84891342870cc1162d1"
+  "capture_layer_sha256": "a90e2293be42df74fa5ab292654fe1284be7c4350052e84891342870cc1162d1",
+  "exit_readbacks_patch_sha256": "f6672ceb639312c3e8440f7066ee042ed12ed313679cf90841209cfc93e64989",
+  "measured_renderer_sha256": "b938cdd735e64cb6456fd37ba5ec62bcacddf41fc9bfab289113c3f3901a7da6"
 }

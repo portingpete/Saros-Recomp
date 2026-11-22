@@ -1,5 +1,5 @@
 diff --git a/lsfg-vk-layer/src/entrypoint.cpp b/lsfg-vk-layer/src/entrypoint.cpp
-index 822acdf..ee8088d 100644
+index 822acdf..4a2cba2 100644
 --- a/lsfg-vk-layer/src/entrypoint.cpp
 +++ b/lsfg-vk-layer/src/entrypoint.cpp
 @@ -12,6 +12,7 @@
@@ -140,7 +140,7 @@ index 822acdf..ee8088d 100644
 +                imageCount-caps.surfaceCapabilities.minImageCount : 0u;
 +            // Reserve a game image and another image for the next generation pass.
 +            const uint32_t retained = newInfo.imageExtent.width == 2560 && newInfo.imageExtent.height == 1440 && spare>2 ?
-+                std::min(2u,spare-2) : 0;
++                std::min(4u,spare-2) : 0;
 +            std::fprintf(stderr,"[paced-capacity] images=%u min=%u retained=%u extent=%ux%u\n",
 +                imageCount,caps.surfaceCapabilities.minImageCount,retained,newInfo.imageExtent.width,newInfo.imageExtent.height);
              auto& info = instance_info->swapchainInfos.emplace(*swapchain, SwapchainInfo {
@@ -385,10 +385,10 @@ index 0000000..41d9e4f
 +}
 diff --git a/lsfg-vk-layer/src/paced-queue.hpp b/lsfg-vk-layer/src/paced-queue.hpp
 new file mode 100644
-index 0000000..d81a0d8
+index 0000000..3ca7980
 --- /dev/null
 +++ b/lsfg-vk-layer/src/paced-queue.hpp
-@@ -0,0 +1,154 @@
+@@ -0,0 +1,162 @@
 +/* SPDX-License-Identifier: GPL-3.0-or-later */
 +#pragma once
 +
@@ -413,6 +413,8 @@ index 0000000..d81a0d8
 +    VkExtent2D extent;
 +    bool observe;
 +    PresentWitness witness;
++    VkSemaphore gpuProgress;
++    uint64_t requiredValue;
 +};
 +
 +class PacedQueue {
@@ -463,7 +465,13 @@ index 0000000..d81a0d8
 +            images.pop_front();
 +            busy = true;
 +            lock.unlock();
-+            pace();
++            VkSemaphoreWaitInfo wait{VK_STRUCTURE_TYPE_SEMAPHORE_WAIT_INFO};
++            wait.semaphoreCount=1;
++            wait.pSemaphores=&image.gpuProgress;
++            wait.pValues=&image.requiredValue;
++            // A binary semaphore remains in the WSI request for Vulkan's memory dependency.
++            const auto ready=vk.df().WaitSemaphoresKHR(vk.dev(),&wait,UINT64_MAX);
++            if (ready==VK_SUCCESS) pace();
 +            VkPresentInfoKHR present{VK_STRUCTURE_TYPE_PRESENT_INFO_KHR};
 +            present.swapchainCount = 1;
 +            present.pSwapchains = &image.chain;
@@ -471,8 +479,8 @@ index 0000000..d81a0d8
 +            present.waitSemaphoreCount = 1;
 +            present.pWaitSemaphores = &image.ready;
 +            std::unique_lock access(swapchainAccess);
-+            auto result = image.timing->Present(vk, queue, present, image.frame,
-+                image.generated, image.extent, image.observe, false);
++            auto result = ready==VK_SUCCESS ? image.timing->Present(vk, queue, present, image.frame,
++                image.generated, image.extent, image.observe, false) : ready;
 +            if (result == VK_SUCCESS || result == VK_SUBOPTIMAL_KHR)
 +                image.witness(image.chain, image.frame, image.generated, image.image, image.extent);
 +            access.unlock();
@@ -544,7 +552,7 @@ index 0000000..d81a0d8
 +}
 +
 diff --git a/lsfg-vk-layer/src/swapchain.cpp b/lsfg-vk-layer/src/swapchain.cpp
-index 8234119..de9f0e8 100644
+index 8234119..c3f08d0 100644
 --- a/lsfg-vk-layer/src/swapchain.cpp
 +++ b/lsfg-vk-layer/src/swapchain.cpp
 @@ -24,7 +24,36 @@
@@ -584,18 +592,19 @@ index 8234119..de9f0e8 100644
      VkImageMemoryBarrier barrierHelper(VkImage handle,
              VkAccessFlags srcAccessMask,
              VkAccessFlags dstAccessMask,
-@@ -123,6 +152,10 @@ Swapchain::Swapchain(const vk::Vulkan& vk, backend::Instance& backend,
+@@ -123,6 +152,11 @@ Swapchain::Swapchain(const vk::Vulkan& vk, backend::Instance& backend,
          });
      }
  
 +    if (this->info.paced) {
++        outputComplete.emplace(vk,0);
 +        imageReady.reserve(this->info.images.size());
 +        for (size_t n=0; n<this->info.images.size(); ++n) imageReady.emplace_back(vk);
 +    }
      const size_t frames = std::max(this->info.images.size(), this->destinationImages.size() + 2);
      for (size_t i = 0; i < frames; i++) {
          this->postCopySemaphores.emplace_back(
-@@ -139,6 +172,18 @@ VkResult Swapchain::present(const vk::Vulkan& vk,
+@@ -139,6 +173,18 @@ VkResult Swapchain::present(const vk::Vulkan& vk,
      const auto& swapchainImage = this->info.images.at(imageIdx);
      const auto& sourceImage = this->sourceImages.at(this->fidx % 2);
  
@@ -605,7 +614,7 @@ index 8234119..de9f0e8 100644
 +        uint32_t image = *present.pImageIndices;
 +        if (paced)
 +            return this->info.paced->submit({outputTiming,swapchain,*present.pWaitSemaphores,
-+                image,this->fidx,generated,this->info.extent,this->info.display_timing,OpticalPresentSample});
++                image,this->fidx,generated,this->info.extent,this->info.display_timing,OpticalPresentSample,outputComplete->handle(),completedPass});
 +        VkResult result = outputTiming->Present(vk,queue,present,this->fidx,generated,this->info.extent,this->info.display_timing,false);
 +        if (result == VK_SUCCESS || result == VK_SUBOPTIMAL_KHR)
 +            OpticalPresentSample(swapchain,this->fidx,generated,image,this->info.extent);
@@ -614,7 +623,7 @@ index 8234119..de9f0e8 100644
      // schedule frame generation
      try {
          this->instance.get().scheduleFrames(this->ctx.get());
-@@ -213,7 +258,7 @@ VkResult Swapchain::present(const vk::Vulkan& vk,
+@@ -213,7 +259,7 @@ VkResult Swapchain::present(const vk::Vulkan& vk,
  
          // acquire swapchain image
          uint32_t aqImageIdx{};
@@ -623,7 +632,7 @@ index 8234119..de9f0e8 100644
              UINT64_MAX, pass.acquireSemaphore.handle(),
              VK_NULL_HANDLE,
              &aqImageIdx
-@@ -261,8 +306,8 @@ VkResult Swapchain::present(const vk::Vulkan& vk,
+@@ -261,14 +307,14 @@ VkResult Swapchain::present(const vk::Vulkan& vk,
          }
  
          const std::vector<VkSemaphore> signalSemaphores{
@@ -634,7 +643,14 @@ index 8234119..de9f0e8 100644
          };
  
          cmdbuf.end(vk);
-@@ -277,16 +322,16 @@ VkResult Swapchain::present(const vk::Vulkan& vk,
+         cmdbuf.submit(vk,
+             waitSemaphores, this->syncSemaphore->handle(), this->idx,
+-            signalSemaphores, VK_NULL_HANDLE, 0,
++            signalSemaphores, paced ? outputComplete->handle() : VK_NULL_HANDLE, paced ? ++completedPass : 0,
+             i == this->destinationImages.size() - 1 ? this->renderFence->handle() : VK_NULL_HANDLE
+         );
+ 
+@@ -277,16 +323,16 @@ VkResult Swapchain::present(const vk::Vulkan& vk,
              .sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
              .pNext = i ? nullptr : next_chain,
              .waitSemaphoreCount = 1,
@@ -654,7 +670,7 @@ index 8234119..de9f0e8 100644
          this->idx++;
      }
  
-@@ -295,15 +340,20 @@ VkResult Swapchain::present(const vk::Vulkan& vk,
+@@ -295,15 +341,20 @@ VkResult Swapchain::present(const vk::Vulkan& vk,
      const VkPresentInfoKHR presentInfo{
          .sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
          .waitSemaphoreCount = 1,
@@ -678,7 +694,7 @@ index 8234119..de9f0e8 100644
      return res;
  }
 diff --git a/lsfg-vk-layer/src/swapchain.hpp b/lsfg-vk-layer/src/swapchain.hpp
-index 3c711a0..9f26157 100644
+index 3c711a0..ac16ead 100644
 --- a/lsfg-vk-layer/src/swapchain.hpp
 +++ b/lsfg-vk-layer/src/swapchain.hpp
 @@ -12,6 +12,7 @@
@@ -700,17 +716,19 @@ index 3c711a0..9f26157 100644
      };
  
      /// modify the swapchain create info based on the profile pre-swapchain creation
-@@ -58,7 +63,9 @@ namespace lsfgvk::layer {
+@@ -58,7 +63,11 @@ namespace lsfgvk::layer {
              VkQueue queue, VkSwapchainKHR swapchain,
              void* next_chain, uint32_t imageIdx,
              const std::vector<VkSemaphore>& semaphores);
 +        void drain() { if (info.paced) info.paced->drain(); }
      private:
 +        std::vector<vk::Semaphore> imageReady;
++        ls::lazy<vk::TimelineSemaphore> outputComplete;
++        uint64_t completedPass = 0;
          std::vector<vk::Image> sourceImages;
          std::vector<vk::Image> destinationImages;
          ls::lazy<vk::TimelineSemaphore> syncSemaphore;
-@@ -75,6 +82,7 @@ namespace lsfgvk::layer {
+@@ -75,6 +84,7 @@ namespace lsfgvk::layer {
          ls::R<backend::Instance> instance;
          ls::owned_ptr<ls::R<backend::Context>> ctx;
          size_t idx{1};
