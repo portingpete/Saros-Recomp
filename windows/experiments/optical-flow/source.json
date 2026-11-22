@@ -10,5 +10,6 @@
   "first_published_revision": "c0128ac2643120866d125518fb671802dc486e2e",
   "capture_layer_sha256": "a90e2293be42df74fa5ab292654fe1284be7c4350052e84891342870cc1162d1",
   "exit_readbacks_patch_sha256": "f6672ceb639312c3e8440f7066ee042ed12ed313679cf90841209cfc93e64989",
-  "measured_renderer_sha256": "b938cdd735e64cb6456fd37ba5ec62bcacddf41fc9bfab289113c3f3901a7da6"
+  "measured_renderer_sha256": "b938cdd735e64cb6456fd37ba5ec62bcacddf41fc9bfab289113c3f3901a7da6",
+  "separate_renderer_rebuild_sha256": "85596975a09d65ebb7a8d792e4878b42f5afb3d54c515351a259df19f19765f3"
 }

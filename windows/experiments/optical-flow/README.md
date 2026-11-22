@@ -25,6 +25,8 @@ The host was a Core i9-14900K with a GeForce RTX 5080, driver 617.14 and a 360 H
 
 The compressed CSV contains all 45,494 successful presents from the twelve route windows. Present IDs select the submissions that returned within each route. Return times are in host QPC nanoseconds from the first guest flip. Scanout times are in Vulkan stage-local nanoseconds from the earliest positive report in that cohort. A numeric zero marks this origin. An empty cell represents a complete report without a positive timestamp. Rates and intervals use distinct timestamps within a single stage clock. The original image has index −1. In the four-pending sixfold run, 6,562 of 10,212 successful presents had positive stage timestamps. Two tight-turn presents shared one timestamp, leaving 6,561 distinct scanouts. [Per-present evidence](per-present.csv.gz)
 
+Seven pairs on each sixfold route had distinct driver timestamps only 100 ns apart. Counting timestamps at least half a 360 Hz refresh apart gives 109.87 and 108.24 scanouts/s, averaging 109.06. Counting each distinct timestamp gives 110.11 and 108.48. The included script reproduces both counts for every route from the compressed CSV. [Measurement script](summarize_presentations.py)
+
 Six consecutive original and generated swapchain images from the tight turn show the moving character, scenery and HUD. All six 2560 × 1440 source images had different hashes. The contact sheet shows the images submitted to Vulkan.
 
 ![Six consecutive Saros gameplay frames from the paced output queue](consecutive-frames.jpg)
