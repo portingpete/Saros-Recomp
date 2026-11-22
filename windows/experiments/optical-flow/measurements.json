@@ -187,6 +187,62 @@
         "2": 348,
         "-1": 462
       }
+    },
+    {
+      "variant": "two_pending_120",
+      "route": "seed_circle",
+      "duration_ns": 30029051600,
+      "world_units": 2083.711,
+      "exit_code": 0,
+      "engine_ticks": 892,
+      "engine_sample_interval_ns": 29937560200,
+      "engine_fps": 29.795,
+      "guest_flips_per_s": 29.8045,
+      "vulkan_presents_per_s": 119.218,
+      "vulkan_originals": 895,
+      "generated_presents": 2685,
+      "complete_stage_reports": 3580,
+      "positive_distinct": 2535,
+      "zero_stage_reports": 1045,
+      "scanout_fps": 84.418,
+      "first_to_last_scanout_fps": 84.456,
+      "median_scanout_ms": 11.111,
+      "p95_scanout_ms": 22.223,
+      "longest_scanout_ms": 55.5565,
+      "positive_by_generated_index": {
+        "2": 486,
+        "0": 765,
+        "1": 709,
+        "-1": 575
+      }
+    },
+    {
+      "variant": "two_pending_120",
+      "route": "circle_camera",
+      "duration_ns": 30006067400,
+      "world_units": 4186.461,
+      "exit_code": 0,
+      "engine_ticks": 838,
+      "engine_sample_interval_ns": 29931014350,
+      "engine_fps": 27.998,
+      "guest_flips_per_s": 28.0277,
+      "vulkan_presents_per_s": 112.111,
+      "vulkan_originals": 841,
+      "generated_presents": 2523,
+      "complete_stage_reports": 3364,
+      "positive_distinct": 2401,
+      "zero_stage_reports": 963,
+      "scanout_fps": 80.017,
+      "first_to_last_scanout_fps": 80.027,
+      "median_scanout_ms": 11.111,
+      "p95_scanout_ms": 25.001,
+      "longest_scanout_ms": 247.2296,
+      "positive_by_generated_index": {
+        "-1": 592,
+        "0": 706,
+        "1": 603,
+        "2": 500
+      }
     }
   ],
   "scope": "Each route covers 30 seconds of simultaneous character movement and camera rotation from the prologue checkpoint on an isolated Windows desktop. Scanout counts distinct positive timestamps at VK_PRESENT_STAGE_IMAGE_FIRST_PIXEL_OUT_BIT_EXT. The visible-pixel stage was unavailable."

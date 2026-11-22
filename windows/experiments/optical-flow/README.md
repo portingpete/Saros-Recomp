@@ -1,6 +1,6 @@
 # Saros optical frame generation on Windows
 
-The optical-flow layer reached an average of **56.73 distinct driver-reported scanouts per second** across two moving prologue routes at 2560 × 1440. The game advanced **20.15 frames per second**. The layer generated three intermediate images per game frame. Waiting for their presentation improved display delivery and slowed the game simulation.
+The optical-flow layer reached an average of **82.22 distinct driver-reported scanouts per second** across two moving prologue routes at 2560 × 1440. The game advanced **28.90 frames per second**. The layer generated three intermediate images per game frame.
 
 | Presentation method | Route | Game FPS | Vulkan presents/s | Distinct scanouts/s | Median scanout interval | 95th percentile |
 | --- | --- | ---: | ---: | ---: | ---: | ---: |
@@ -10,12 +10,16 @@ The optical-flow layer reached an average of **56.73 distinct driver-reported sc
 | Driver relative target of 8.33 ms | Wide turn | 28.14 | 112.47 | 31.75 | 33.33 ms | 50.00 ms |
 | Dedicated queue paced at 120 Hz | Tight turn | 20.10 | 80.38 | 56.75 | 16.67 ms | 33.34 ms |
 | Dedicated queue paced at 120 Hz | Wide turn | 20.20 | 80.73 | 56.72 | 16.67 ms | 33.34 ms |
+| Up to two presents pending | Tight turn | 29.80 | 119.22 | 84.42 | 11.11 ms | 22.22 ms |
+| Up to two presents pending | Wide turn | 28.00 | 112.11 | 80.02 | 11.11 ms | 25.00 ms |
 
-The patched layer spaces the generated and original images on a second Vulkan queue in the same graphics family. On the measured build it releases all four images before returning from each game present. Tight-turn scanout rose by 15.76 frames/s and wide-turn scanout rose by 20.01. Waiting on a group also raised the median engine frame interval to roughly 50 ms. These measurements cover the existing prologue checkpoint, with the player running and the camera turning for 30 seconds per route. Each trial closed cleanly. [Measurements](measurements.json)
+The layer spaces generated and original images on a second Vulkan queue in the same graphics family. The first paced build waited for all four presentations before releasing the game thread. The current build allows up to two pending presentations on the final 1440p swapchain. The driver supplied seven images and reported a minimum of two. The change raised the two-route scanout average from 56.73 to 82.22 frames/s and the engine average from 20.15 to 28.90 FPS. Each route covered 30 seconds of simultaneous running and camera rotation. [Measurements](measurements.json)
+
+The capture layer submitted its screenshot copy on the same queue that presented the frame. This run recorded six timed gameplay screenshots and closed normally with zero dropped telemetry records. An earlier trial using the general-purpose capture queue hit a Vulkan device loss on the wide turn. Its partial result is excluded. The longest scanout gap in the completed wide turn was 247.23 ms.
 
 The host was a Core i9-14900K with a GeForce RTX 5080, driver 617.14 and a 360 Hz monitor. The game rendered at 100% scale with FXAA and its own frame interpolation disabled. A separate Vulkan layer ran optical flow at a scale of 0.75. The Windows client and Vulkan images measured 2560 × 1440 on an isolated desktop. The engine rate comes from Unreal's frame counter. The Vulkan rate counts successful presentation calls. The scanout rate counts distinct positive first-pixel-out timestamps reported by the driver. That stage tracks transmission to display hardware. The driver did not expose first-pixel-visible timing. [Vulkan stage definitions](https://docs.vulkan.org/refpages/latest/refpages/source/VkPresentStageFlagBitsEXT.html)
 
-The compressed CSV contains all 20,304 successful presents from the six route windows. Times are nanoseconds relative to the start of each route. An empty scanout timestamp represents a complete report with a zero timestamp. The generated-image index runs from 0 to 2 and the original image has index −1. Across the two paced routes the driver returned positive timestamps for 3,406 of 4,836 presentations. [Per-present evidence](per-present.csv.gz)
+The compressed CSV contains all 27,248 successful presents from the eight route windows. Times are nanoseconds relative to the start of each route. An empty scanout timestamp represents a complete report with a zero timestamp. The generated-image index runs from 0 to 2 and the original image has index −1. In the two-pending run the driver returned positive timestamps for 4,936 of 6,944 presentations. [Per-present evidence](per-present.csv.gz)
 
 Six consecutive original and generated swapchain images from the tight turn show the moving character, scenery and HUD. All six 2560 × 1440 source images had different hashes. The contact sheet shows the images submitted to Vulkan.
 

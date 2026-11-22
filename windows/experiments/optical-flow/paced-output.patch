@@ -1,5 +1,5 @@
 diff --git a/lsfg-vk-layer/src/entrypoint.cpp b/lsfg-vk-layer/src/entrypoint.cpp
-index 822acdf..dfa3001 100644
+index 822acdf..ee8088d 100644
 --- a/lsfg-vk-layer/src/entrypoint.cpp
 +++ b/lsfg-vk-layer/src/entrypoint.cpp
 @@ -12,6 +12,7 @@
@@ -96,7 +96,16 @@ index 822acdf..dfa3001 100644
          auto it = instance_info->devices.find(device);
          if (it != instance_info->devices.end())
              instance_info->devices.erase(it);
-@@ -301,6 +349,17 @@ namespace {
+@@ -244,6 +292,8 @@ namespace {
+ 
+     // get optional function pointer override
+     PFN_vkVoidFunction getProcAddr(const std::string& name) {
++        if(name=="vkAcquireNextImageKHR" || name=="vkAcquireNextImage2KHR")
++            std::fprintf(stderr,"[paced-lookup] %s\n",name.c_str());
+         auto it = layer_info->map.find(name);
+         if (it != layer_info->map.end())
+             return it->second;
+@@ -301,6 +351,17 @@ namespace {
  
              // create swapchain
              VkSwapchainCreateInfoKHR newInfo = *info;
@@ -114,7 +123,7 @@ index 822acdf..dfa3001 100644
              layer_info->root.modifySwapchainCreateInfo(it->second, newInfo,
                  [=, newInfo = &newInfo]() {
                      auto res = it->second.df().CreateSwapchainKHR(
-@@ -323,12 +382,24 @@ namespace {
+@@ -323,12 +384,32 @@ namespace {
              if (res != VK_SUCCESS)
                  throw ls::vulkan_error(res, "vkGetSwapchainImagesKHR() failed");
  
@@ -127,6 +136,13 @@ index 822acdf..dfa3001 100644
 +                if(support && support(it->second.physdev(),familyQueue->second.first,info->surface,&canPresent)==VK_SUCCESS && canPresent)
 +                    pacer=familyQueue->second.second;
 +            }
++            const uint32_t spare = imageCount > caps.surfaceCapabilities.minImageCount ?
++                imageCount-caps.surfaceCapabilities.minImageCount : 0u;
++            // Reserve a game image and another image for the next generation pass.
++            const uint32_t retained = newInfo.imageExtent.width == 2560 && newInfo.imageExtent.height == 1440 && spare>2 ?
++                std::min(2u,spare-2) : 0;
++            std::fprintf(stderr,"[paced-capacity] images=%u min=%u retained=%u extent=%ux%u\n",
++                imageCount,caps.surfaceCapabilities.minImageCount,retained,newInfo.imageExtent.width,newInfo.imageExtent.height);
              auto& info = instance_info->swapchainInfos.emplace(*swapchain, SwapchainInfo {
                  .images = std::move(swapchainImages),
                  .format = newInfo.imageFormat,
@@ -136,11 +152,12 @@ index 822acdf..dfa3001 100644
 +                .presentMode = newInfo.presentMode,
 +                .display_timing = (newInfo.flags & VK_SWAPCHAIN_CREATE_PRESENT_TIMING_BIT_EXT)!=0,
 +                .relative_timing = instance_info->relativeTiming.at(device) && timing.presentAtRelativeTimeSupported,
-+                .paced = pacer
++                .paced = pacer,
++                .retainedImages = retained
              }).first->second;
  
              // create lsfg-vk swapchain
-@@ -422,6 +493,28 @@ namespace {
+@@ -422,6 +503,28 @@ namespace {
  #pragma clang diagnostic pop
      }
  
@@ -169,7 +186,7 @@ index 822acdf..dfa3001 100644
      void myvkDestroySwapchainKHR(
              VkDevice device,
              VkSwapchainKHR swapchain,
-@@ -470,6 +563,8 @@ VkResult vkNegotiateLoaderLayerInterfaceVersion(VkNegotiateLayerInterface* pVers
+@@ -470,6 +573,8 @@ VkResult vkNegotiateLoaderLayerInterfaceVersion(VkNegotiateLayerInterface* pVers
  #define VKPTR(name) reinterpret_cast<PFN_vkVoidFunction>(name)
                  { "vkCreateInstance", VKPTR(myvkCreateInstance) },
                  { "vkCreateDevice", VKPTR(myvkCreateDevice) },
@@ -368,10 +385,10 @@ index 0000000..41d9e4f
 +}
 diff --git a/lsfg-vk-layer/src/paced-queue.hpp b/lsfg-vk-layer/src/paced-queue.hpp
 new file mode 100644
-index 0000000..d9e7068
+index 0000000..d81a0d8
 --- /dev/null
 +++ b/lsfg-vk-layer/src/paced-queue.hpp
-@@ -0,0 +1,149 @@
+@@ -0,0 +1,154 @@
 +/* SPDX-License-Identifier: GPL-3.0-or-later */
 +#pragma once
 +
@@ -510,6 +527,11 @@ index 0000000..d9e7068
 +        return error;
 +    }
 +
++    VkResult waitForRoom(size_t retained) {
++        std::unique_lock lock(mutex);
++        changed.wait(lock,[&] { return images.size()+size_t(busy)<=retained; });
++        return error;
++    }
 +    VkResult drain(bool idle = true) {
 +        std::unique_lock lock(mutex);
 +        changed.wait(lock, [this] { return images.empty() && !busy; });
@@ -522,7 +544,7 @@ index 0000000..d9e7068
 +}
 +
 diff --git a/lsfg-vk-layer/src/swapchain.cpp b/lsfg-vk-layer/src/swapchain.cpp
-index 8234119..e1c97e7 100644
+index 8234119..de9f0e8 100644
 --- a/lsfg-vk-layer/src/swapchain.cpp
 +++ b/lsfg-vk-layer/src/swapchain.cpp
 @@ -24,7 +24,36 @@
@@ -649,14 +671,14 @@ index 8234119..e1c97e7 100644
  
 +
 +    if(paced) {
-+        auto released=this->info.paced->drain(false);
++        auto released=this->info.paced->waitForRoom(info.retainedImages);
 +        if(res==VK_SUCCESS) res=released;
 +    }
      this->fidx++;
      return res;
  }
 diff --git a/lsfg-vk-layer/src/swapchain.hpp b/lsfg-vk-layer/src/swapchain.hpp
-index 3c711a0..05dd797 100644
+index 3c711a0..9f26157 100644
 --- a/lsfg-vk-layer/src/swapchain.hpp
 +++ b/lsfg-vk-layer/src/swapchain.hpp
 @@ -12,6 +12,7 @@
@@ -667,17 +689,18 @@ index 3c711a0..05dd797 100644
  #include <cstdint>
  #include <utility>
  #include <vector>
-@@ -27,6 +28,9 @@ namespace lsfgvk::layer {
+@@ -27,6 +28,10 @@ namespace lsfgvk::layer {
          VkColorSpaceKHR colorSpace;
          VkExtent2D extent;
          VkPresentModeKHR presentMode;
 +        bool display_timing{false};
 +        bool relative_timing{false};
 +        std::shared_ptr<PacedQueue> paced;
++        size_t retainedImages{};
      };
  
      /// modify the swapchain create info based on the profile pre-swapchain creation
-@@ -58,7 +62,9 @@ namespace lsfgvk::layer {
+@@ -58,7 +63,9 @@ namespace lsfgvk::layer {
              VkQueue queue, VkSwapchainKHR swapchain,
              void* next_chain, uint32_t imageIdx,
              const std::vector<VkSemaphore>& semaphores);
@@ -687,7 +710,7 @@ index 3c711a0..05dd797 100644
          std::vector<vk::Image> sourceImages;
          std::vector<vk::Image> destinationImages;
          ls::lazy<vk::TimelineSemaphore> syncSemaphore;
-@@ -75,6 +81,7 @@ namespace lsfgvk::layer {
+@@ -75,6 +82,7 @@ namespace lsfgvk::layer {
          ls::R<backend::Instance> instance;
          ls::owned_ptr<ls::R<backend::Context>> ctx;
          size_t idx{1};
