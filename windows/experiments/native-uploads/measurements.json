@@ -177,5 +177,74 @@
         "regions": 10112858
       }
     }
+  },
+  "independent_rebuild": {
+    "binary_sha256": "029c42c433b69d8861df54e7450d45ae7d6acad8a5df987f2c9dffccce1c16c9",
+    "patch_sha256": "24c1f9184344a2818e2b73957a72343c10c74ed9132e2fab11f88ba27ad21bfb",
+    "compiled_source_sha256": "e0c6a24851c8a5a7b44779cd3f767bdf300cea18d427f412a34f6bef8a21b9a8",
+    "baseline_archive_sha256": "7eeeb5579aa62641d52878d250afd8d6bed99317bbc528a66677c7c576e806e9",
+    "build_exit": 0,
+    "abi_exit": 0,
+    "initial_launch": {
+      "mean_route_fps": 37.2207,
+      "guest_programs_loaded": 0,
+      "routes": {
+        "seed_circle": {
+          "completed_flip_fps": 40.4674,
+          "engine_tick_fps": 40.45487779126004,
+          "minimum_travel_world_units": 1196.73
+        },
+        "circle_camera": {
+          "completed_flip_fps": 33.9738,
+          "engine_tick_fps": 33.946016001917826,
+          "minimum_travel_world_units": 4483.222
+        }
+      },
+      "exit_code": 0,
+      "telemetry_drops": 0,
+      "qualification": "Six gameplay images and player movement observed. The guest shader cache was cold."
+    },
+    "video": {
+      "frames": 34,
+      "unique_decoded_frames": 34,
+      "max_timestamp_rounding_ms": 0.497099999999584,
+      "source_sha256": "7bd761915beffe2b07b4ef402b68669481f5456385f8d95addbe63c88253f172",
+      "benchmark_scope": "Separate movement pass after both timed routes."
+    },
+    "warmed_launch": {
+      "mean_route_fps": 39.7572,
+      "routes": {
+        "seed_circle": {
+          "observed_completions": 1253,
+          "seconds": 30.001746,
+          "completed_flip_fps": 41.7642,
+          "engine_ticks": 1247,
+          "engine_tick_seconds": 29.854126200000003,
+          "engine_tick_fps": 41.76977050495619,
+          "p95_ms": 32.423,
+          "minimum_travel_world_units": 1799.74
+        },
+        "circle_camera": {
+          "observed_completions": 1135,
+          "seconds": 30.062859,
+          "completed_flip_fps": 37.7542,
+          "engine_ticks": 1133,
+          "engine_tick_seconds": 29.98440065,
+          "engine_tick_fps": 37.78631473162363,
+          "p95_ms": 34.213,
+          "minimum_travel_world_units": 4514.138
+        }
+      },
+      "cache": {
+        "programs_modules_pipelines": [
+          523,
+          670,
+          489
+        ],
+        "driver_loaded_mb": 47.97
+      },
+      "game_exit": 0,
+      "telemetry_drops": 0
+    }
   }
 }

@@ -174,7 +174,21 @@
         ],
         "clean_exit_on_repeat": true
       },
-      "evidence": "windows/experiments/native-uploads/measurements.json"
+      "evidence": "windows/experiments/native-uploads/measurements.json",
+      "capture": {
+        "width": 1280,
+        "height": 720,
+        "distinct_frames": 34,
+        "duration_s": 5.844,
+        "average_sample_rate_fps": 5.817932922655715,
+        "renderer_sha256": "029c42c433b69d8861df54e7450d45ae7d6acad8a5df987f2c9dffccce1c16c9",
+        "source_swapchain_pixels": [
+          2560,
+          1440
+        ],
+        "scope": "Separate moving pass after the two routes on the independently rebuilt renderer."
+      },
+      "recording_sha256": "7bd761915beffe2b07b4ef402b68669481f5456385f8d95addbe63c88253f172"
     }
   ]
 }

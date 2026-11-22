@@ -18,6 +18,10 @@ The first two rows show the tight and wide turns from the 41.02 FPS run. The las
 
 An open AnyPS5 pull request suggested testing the cost of Vulkan copies on NVIDIA hardware. This renderer already groups uploads to multiple destinations into a compute dispatch. Sending those uploads through the existing transfer-command path reduced the two-route mean on this machine. The first run and the repeat both used the original compute path. The comparison with November 20 includes other renderer and profile changes. [AnyPS5 PR #20315](https://github.com/boykopovar/AnyPS5/pull/20315) · [Previous measurements](../../../benchmarks.json)
 
+A separate build from the public renderer source passed the Windows ABI check and reached both gameplay routes. Its first launch loaded zero guest programs from the shader cache and averaged 37.22 FPS. The movement clip came from a separate pass after those measurements. Its 34 distinct images span 5.84 seconds and preserve the Vulkan capture timestamps to within 0.50 ms. The video is scaled to 1280 × 720 for distribution. [Gameplay video](../../../media/prologue.mp4) · [Build and recording evidence](measurements.json)
+
+With a matching shader cache, the independently rebuilt renderer averaged **39.76 FPS**. It delivered 41.76 FPS on the tight turn and 37.75 FPS on the wide turn. The process loaded 523 guest programs, 670 modules, 489 pipelines and 47.97 MB of Vulkan driver cache. It finished both routes with zero telemetry drops and exited normally. [Warmed rebuild measurements](measurements.json)
+
 ## Build and play
 
 Reconstruct the Windows renderer source, apply the interpolation renderer patch and then apply the optical experiment’s shutdown patch. Generate the headers and selectable gameplay profile from your local game installation using the linked instructions. The native upload experiment uses the renderer and the gameplay profile only. [Renderer reconstruction](../../renderer/README.md) · [Profile and shader cache](../interpolation/README.md) · [Shutdown patch](../optical-flow/exit-readbacks.patch)
