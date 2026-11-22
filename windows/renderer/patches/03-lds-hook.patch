@@ -1,0 +1,34 @@
+--- a/core/kyty/graphics/host_gpu/vulkanCommon.cpp
++++ b/core/kyty/graphics/host_gpu/vulkanCommon.cpp
+@@ -11,6 +11,8 @@
+ #include <optional>
+ #include <string_view>
+ #include <xxhash.h>
++#include "SarosLds.h"
++#include <atomic>
+ 
+ VULKAN_HPP_DEFAULT_DISPATCH_LOADER_DYNAMIC_STORAGE
+ 
+@@ -130,6 +132,22 @@
+ }
+ 
+ vk::ShaderModule CompileSPV(std::span<const uint32_t> code, vk::Device device) {
++    std::vector<uint32_t> sarosLds;
++    if (code.size()==SarosLds::originalWords) {
++        static const bool enabled=[] {
++            const char* value=std::getenv("KYTY_SAROS_LDS_PRIVATE");
++            return value && std::string_view(value)=="1";
++        }();
++        if (enabled) {
++            sarosLds=SarosLds::Apply(code);
++            if (!sarosLds.empty()) {
++                code=sarosLds;
++                static std::atomic_flag logged=ATOMIC_FLAG_INIT;
++                if (!logged.test_and_set()) std::fprintf(stderr,"[saros-lds-private] compiled b71998dd7f42ee67 with 52 workgroup barriers\n");
++            }
++        }
++    }
++
+ 	static const auto selected = []() -> std::optional<uint64_t> {
+ 		const char* value = std::getenv("KYTY_BLOCK_BALLOT_MODULE");
+ 		if (value == nullptr || *value == '\0') return {};

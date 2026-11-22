@@ -1,0 +1,173 @@
+#pragma once
+#ifdef _WIN32
+#include <windows.h>
+#include <array>
+#include <cstdint>
+#include <cstdio>
+#include <cstdlib>
+#include <string_view>
+
+namespace SarosNativeScale {
+template <typename T>
+inline bool read(std::uintptr_t address, T& value) {
+    SIZE_T count = 0;
+    return ReadProcessMemory(GetCurrentProcess(), reinterpret_cast<const void*>(address), &value,
+                             sizeof(value), &count) && count == sizeof(value);
+}
+inline bool matchesExecutable() {
+    constexpr std::uintptr_t base = 0x400000;
+    constexpr std::array<unsigned char, 7> width{@guest_024aeee6_spaced@};
+    constexpr std::array<unsigned char, 7> height{@guest_024aef07_spaced@};
+    std::array<unsigned char, 7> code{};
+    return read(base + 0x20aeee6, code) && code == width && read(base + 0x20aef07, code) && code == height;
+}
+struct Scale {
+    std::uintptr_t address{};
+    std::array<float, 2> value{};
+    bool load(std::uintptr_t registration, float retail) {
+        if (!read(registration + 16, address) || !address || (address & 3) || !read(address, value)) return false;
+        for (const auto setting : value) if (setting != retail && setting != 100.0f) return false;
+        return true;
+    }
+    bool set() const {
+        constexpr std::array<float, 2> target{100.0f, 100.0f};
+        if (value == target) return true;
+        SIZE_T bytes = 0;
+        return WriteProcessMemory(GetCurrentProcess(), reinterpret_cast<void*>(address), target.data(),
+                                  sizeof(target), &bytes) && bytes == sizeof(target);
+    }
+};
+inline void updateNaniteShading(std::uint64_t frame) {
+    static const bool enabled = std::getenv("APS5_SAROS_UNBUNDLED_SHADING") && matchesExecutable();
+    if (!enabled || (frame > 1 && frame % 15 != 0)) return;
+    // This build registers the shading CVar by reference to a static int. Check the
+    // instruction that passes the int to the registrar and the live registration.
+    constexpr std::array<unsigned char, 7> reference{@guest_022ffad0_spaced@};
+    std::array<unsigned char, 7> code{};
+    std::uintptr_t registration{};
+    if (!read(0x22ffad0, code) || code != reference || !read(0x93673e8, registration) || !registration) return;
+    auto* const value = reinterpret_cast<volatile LONG*>(0x93673f0);
+    if (InterlockedCompareExchange(value, 0, 1) == 1)
+        std::fprintf(stderr, "[saros-material] frame=%llu r.Nanite.Bundle.Shading=0\n", static_cast<unsigned long long>(frame));
+}
+
+inline void updatePrologueCulling(std::uint64_t frame) {
+    static const bool enabled = std::getenv("APS5_SAROS_DISABLE_NANITE_HZB") && matchesExecutable();
+    if (!enabled || (frame > 1 && frame % 15 != 0)) return;
+    constexpr std::array<unsigned char, 7> nameLoad{@guest_022f8ac0_spaced@};
+    std::array<unsigned char, 7> code{};
+    std::uintptr_t registration = 0, data = 0;
+    std::array<std::int32_t, 2> values{};
+    if (!read(0x22f8ac0, code) || code != nameLoad || !read(0x9362238, registration) || !registration ||
+        !read(0x9362240, data) || !data || (data & 3u) || !read(data, values) ||
+        values != std::array<std::int32_t, 2>{1, 1}) return;
+    constexpr std::array<std::int32_t, 2> off{};
+    SIZE_T written = 0;
+    if (WriteProcessMemory(GetCurrentProcess(), reinterpret_cast<void*>(data), off.data(), sizeof(off), &written) &&
+        written == sizeof(off) && read(data, values) && values == off)
+        std::fprintf(stderr, "[saros-prologue] frame=%llu r.Nanite.Culling.HZB=0/0\n", static_cast<unsigned long long>(frame));
+}
+
+inline void updateVisibilityTrial(std::uint64_t frame) {
+    static const bool enabled = std::getenv("APS5_SAROS_VISIBILITY_TRIAL") && matchesExecutable();
+    if (!enabled || frame % 5 != 0) return;
+    FILE* control = std::fopen("visibility-trial.txt", "rb");
+    if (control == nullptr) return;
+    char settings[4]{};
+    const auto length = std::fread(settings, 1, sizeof(settings), control);
+    std::fclose(control);
+    if (length != 3 || settings[1] != ' ' ||
+        (settings[0] != '0' && settings[0] != '1') || (settings[2] != '0' && settings[2] != '1')) return;
+    constexpr std::array<unsigned char, 7> hzbCode{@guest_022f8ac0_spaced@};
+    constexpr std::array<unsigned char, 7> bundleCode{@guest_022ffad0_spaced@};
+    std::array<unsigned char, 7> code{};
+    std::uintptr_t hzbRegistration{}, bundleRegistration{}, data{};
+    std::array<LONG, 2> hzb{};
+    LONG bundle{};
+    if (!read(0x22f8ac0, code) || code != hzbCode || !read(0x22ffad0, code) || code != bundleCode ||
+        !read(0x9362238, hzbRegistration) || !hzbRegistration || !read(0x93673e8, bundleRegistration) || !bundleRegistration ||
+        !read(0x9362240, data) || !data || (data & 3u) || !read(data, hzb) || !read(0x93673f0, bundle)) return;
+    if ((bundle != 0 && bundle != 1) || (hzb[0] != 0 && hzb[0] != 1) || hzb[1] != hzb[0]) return;
+    const std::array<LONG, 2> requestedHzb{settings[0] - '0', settings[0] - '0'};
+    const LONG requestedBundle = settings[2] - '0';
+    if (hzb != requestedHzb) {
+        SIZE_T count{};
+        if (!WriteProcessMemory(GetCurrentProcess(), reinterpret_cast<void*>(data), requestedHzb.data(),
+                                sizeof(requestedHzb), &count) || count != sizeof(requestedHzb)) return;
+    }
+    if (bundle != requestedBundle)
+        InterlockedCompareExchange(reinterpret_cast<volatile LONG*>(0x93673f0), requestedBundle, bundle);
+    static int reported = -1;
+    if (!read(data, hzb) || !read(0x93673f0, bundle) || hzb != requestedHzb || bundle != requestedBundle) return;
+    const int current = 2 * hzb[0] + bundle;
+    if (current != reported) {
+        std::fprintf(stderr, "[visibility-trial] frame=%llu hzb=%ld/%ld bundle=%ld\n",
+                     static_cast<unsigned long long>(frame), hzb[0], hzb[1], bundle);
+        reported = current;
+    }
+}
+
+inline void updatePrologueFog(std::uint64_t frame) {
+    enum class FogMode { Original, FroxelOff, VolumetricOff, Off };
+    static const auto mode = [] {
+        const char* value = std::getenv("APS5_SAROS_PROLOGUE_FOG");
+        if (!value || !matchesExecutable()) return FogMode::Original;
+        if (std::string_view(value) == "froxel-off") return FogMode::FroxelOff;
+        if (std::string_view(value) == "volumetric-off") return FogMode::VolumetricOff;
+        return std::string_view(value) == "off" ? FogMode::Off : FogMode::Original;
+    }();
+    if (mode == FogMode::Original || (frame > 1 && frame % 15 != 0)) return;
+    if (mode == FogMode::FroxelOff) {
+        constexpr std::array<unsigned char, 7> name{@guest_0261bef9_compact@};
+        constexpr std::array<unsigned char, 7> reference{@guest_0261bf00_compact@};
+        std::array<unsigned char, 7> instruction{};
+        std::uintptr_t object{}, backing{};
+        if (!read(0x261bef9, instruction) || instruction != name ||
+            !read(0x261bf00, instruction) || instruction != reference ||
+            !read(0x9495378, object) || !object || !read(object + 80, backing) || backing != 0x91dc1f8) return;
+        if (InterlockedCompareExchange(reinterpret_cast<volatile LONG*>(backing), 0, 1) == 1)
+            std::fprintf(stderr, "[saros-prologue] frame=%llu Hmq.FroxelFog.Enabled=0\n", static_cast<unsigned long long>(frame));
+        return;
+    }
+    const bool volumetric = mode == FogMode::VolumetricOff;
+    constexpr std::array<unsigned char, 7> fogName{@guest_022daedd_compact@};
+    constexpr std::array<unsigned char, 7> volumeName{@guest_022d7baf_compact@};
+    constexpr std::array<unsigned char, 7> fogRegistration{@guest_022daef4_compact@};
+    constexpr std::array<unsigned char, 7> volumeReference{@guest_022d7bb6_compact@};
+    std::array<unsigned char, 7> code{};
+    std::uintptr_t object{}, data{};
+    if (!read(volumetric ? 0x22d7baf : 0x22daedd, code) || code != (volumetric ? volumeName : fogName) ||
+        !read(volumetric ? 0x22d7bb6 : 0x22daef4, code) || code != (volumetric ? volumeReference : fogRegistration) ||
+        !read(volumetric ? 0x93b6ed0 : 0x9315930, object) || !object) return;
+    if (volumetric) {
+        if (!read(object + 80, data) || data != 0x91d6740) return;
+        if (InterlockedCompareExchange(reinterpret_cast<volatile LONG*>(data), 0, 1) != 1) return;
+    } else {
+        std::array<LONG, 2> values{};
+        if (!read(0x9315938, data) || data != object + 80 || (data & 7) ||
+            !read(data, values) || values != std::array<LONG,2>{1,1}) return;
+        constexpr LONG64 on = (LONG64{1} << 32) | 1;
+        if (InterlockedCompareExchange64(reinterpret_cast<volatile LONG64*>(data), 0, on) != on) return;
+    }
+    std::fprintf(stderr, "[saros-prologue] frame=%llu %s=0\n", static_cast<unsigned long long>(frame),
+                 volumetric ? "r.VolumetricFog" : "r.Fog");
+}
+
+inline void update(std::uint64_t frame) {
+    updatePrologueFog(frame);
+    updateVisibilityTrial(frame);
+    updateNaniteShading(frame);
+    updatePrologueCulling(frame);
+    static const bool enabled = std::getenv("APS5_SAROS_NATIVE_1440P") && matchesExecutable();
+    if (!enabled || (frame > 1 && frame % 15 != 0)) return;
+    constexpr std::uintptr_t guestBase = 0x400000;
+    Scale minimum, maximum;
+    if (!minimum.load(guestBase + 0x165eb93 + 0x7999d9d, 41.666f) ||
+        !maximum.load(guestBase + 0x165ebde + 0x7999d6a, 60.0f) || maximum.address == minimum.address) return;
+    if (minimum.value[0] == 100 && minimum.value[1] == 100 && maximum.value[0] == 100 && maximum.value[1] == 100) return;
+    if (maximum.set() && minimum.set())
+        std::fprintf(stderr, "[saros-native-scale] frame=%llu min=100 max=100 output=2560x1440\n",
+                     static_cast<unsigned long long>(frame));
+}
+}
+#endif

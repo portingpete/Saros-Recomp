@@ -1,0 +1,100 @@
+{
+  "public_repository": "https://github.com/simnJS/AnyPS5",
+  "public_base_commit": "35419f3c75ae73354fa551f52415cbd07c9c562c",
+  "public_base_tree": "6ce54f347a0c66412c264b967774fbbd64011ac1",
+  "benchmark_local_commit": "c650ffecfba49eb43c50bf8db40d78ea14ae2dda",
+  "milestone_renderer_sha256": "04f7bb0c500bc9b613310f6a49df1a70d74bb614de4f57e7df120985ca742dd4",
+  "patch_stages": [
+    {
+      "path": "patches/00-benchmark-from-upstream.patch",
+      "tree": "d19cb2b14af7aaddb771ce9b213020659dd09a13"
+    },
+    {
+      "path": "patches/01-snapshot-from-benchmark.patch",
+      "tree": "8bee5d224f943560fe564236b1b0a61253fa019b"
+    },
+    {
+      "path": "patches/02-region-buffer-index.patch",
+      "tree": "7c54ef63df585b3c3341f7f9a7da9316cd0301cd"
+    },
+    {
+      "path": "patches/03-lds-hook.patch",
+      "tree": "dafe23c63e022453bea310b2d25726de3ce194af"
+    },
+    {
+      "path": "patches/04-display-window.patch",
+      "tree": "b9434e25a121a14e2dbcf9a70207c98540554bd2"
+    }
+  ],
+  "region_buffer_source_git_blob_lf": "cd7ecf955dcdde5bc50c5002f26879de25d6910b",
+  "lds_hook_source_git_blob_lf": "32e5195eae3e9f7967cb41330b110276a694f28b",
+  "lds_input_module_sha256": "6cd3bcf93c0a0f72855a0d979a5643618377cc3841ac71fa8055d2f21e4f1835",
+  "lds_generated_header_sha256_windows": "64de36dda6e1303e424d343684780459e9a39f132024e7aca867edacc7d678a6",
+  "lds_generated_module_sha256": "b8cecafa801b8515166527965b9ab8a5c8498cd84c162e2c23deb973552baa16",
+  "display_window_source_git_blob_lf": "97b1eeae86f22492087d8ef46133eb0c85b37ebe",
+  "display_input_executable_sha256": "6bd1ce70dea706e606aa49133166cd523e6317d559e71dbfa3d9e0117303f0b4",
+  "display_generated_header_sha256_crlf": "eaba042ec62b43998c86e1216afe06521e89d51e7fba8a283069ad016509310d",
+  "source_region_buffer_sha256_crlf_recorded": "97dc1f3b6910e0a204954f6d301a87d6bc5fa93b420567452bdebf8d099d2f82",
+  "kyty_import_upstream": {
+    "tag": "v24",
+    "revision": "40ddebbe21cd8a75f9da41fb66dad8104c341904"
+  },
+  "toolchain": {
+    "outer_gcc": "15.2.0 winlibs ucrt-posix-seh r7",
+    "cmake": "4.3.1",
+    "ninja": "1.13.2",
+    "renderer_llvm_mingw": "23.1.5",
+    "llvm_revision": "392dfff97d29b59d77e5cac6d4b6ef2585fe7117",
+    "target": "x86_64-w64-windows-gnu",
+    "build_type": "Release",
+    "thin_lto": true,
+    "dll_pgo_mode": "OFF",
+    "shared_kyty_profile": "core/kyty/pgo/kyty_gpu.proftext",
+    "measured_inner_compile_flags": [
+      "-O3",
+      "-DNDEBUG",
+      "-flto=thin",
+      "-fprofile-use=<shared-indexed-profile>"
+    ],
+    "measured_link_flags": [
+      "-O3",
+      "-DNDEBUG",
+      "-shared",
+      "-flto=thin"
+    ],
+    "shared_indexed_profile_sha256": "4a7c8ad1b5337d41bfe1e4659b861d497205e0dd2c2dad45320a6628d97ca1f6"
+  },
+  "limits": [
+    "Test-file changes are excluded; title-byte-matching video helper is locally generated from the verified user executable.",
+    "LDS shader word edits are not distributed; generation requires the user-provided exact shader module.",
+    "Local base archive and dependency source identities are not proven from this snapshot.",
+    "The prebuilt FFmpeg used in the recorded build is not included; source build is not yet verified.",
+    "No binary reproducibility or complete corresponding-source claim."
+  ],
+  "payload_sha256": {
+    "configure-evidence.json": "98b2ce28084ef883ed3e0c9989f37856d305ff3b57f6e9a96b9e7baa2aa64100",
+    "dependencies.json": "c3ddc86ecf19196f67954527266004f24e627ddb3c91b9bf87ad68f23e21f9e8",
+    "display/generate_native_scale.py": "23ce9e8e962adffcaa69a0a280df4fac7427af86c165d084fd856eccf596f1c3",
+    "display/SarosNativeScale.hpp.in": "dd141f4a5c510c480d037d0ae473737594c2dee7e4453e6ddb9dccd1c9679be2",
+    "excluded-paths.json": "7f3f717c102482853fca64d03870409ca615e62a9cfd1e15432d733dbe7dd4a0",
+    "files/core/kyty/graphics/host_gpu/renderer/cache/regionBufferIndex.h": "6bccc5285cdaee6214a2e41c53d22a79cde33f051f7952d9c3cef08460e3cca6",
+    "lds/choose-lds-phases.py": "3fd91ea7084b16f6367a5532fd31289aa2023ab218416a514522fcfc5afc77e0",
+    "lds/generate_lds.py": "f359804879f5fd07ef309410c562fe19fca1df5e34a4fb44c5b969537e8b11b1",
+    "lds/prove-lds-footprints.py": "4ab0ff9e90f4e55612bc96937f65908a273dd57b75c89187f6e153357cc6897d",
+    "lds/README.md": "0ea4b331ba5c14a280a875589184095d151c089d0c93cab2bfe88867d893f97d",
+    "licenses/AnyPS5-GPL-2.txt": "00ef63062e2e05671b88dd18aad65044dccdb9660e3b76209bc41cfe714ff343",
+    "licenses/Kyty-GPL-2.txt": "11c4a8b414a534365f02da7dad9dc3e471d35b15ed31df9d4006fb2a144c4443",
+    "licenses/Kyty-original-MIT.txt": "8905087f2f52e27427b72717d4d7532448c91d1fa1602658801cfe7f08dfc19a",
+    "licenses/THIRD_PARTY_KYTY.md": "e7c77c324036558383112cf4b7e0b55b524f953d272f35008f8b36f27eb5cb5a",
+    "patches/00-benchmark-from-upstream.patch": "b5d776dbf505545dc3bfb52d4fb8f8fa6087ee07e64a81221dc9bff349194c87",
+    "patches/01-snapshot-from-benchmark.patch": "57a924aa29b216dc637c25afdd7bb142b2bd0d537263b0b8ea460679fda3062a",
+    "patches/02-region-buffer-index.patch": "7d7af455c45003673d430bd868b3e9a35b45015c137e1feb6a1a92e12d780ad8",
+    "patches/03-lds-hook.patch": "a51b7a793ecb942e21ce5adf36d78847c6b461464dd70966d9752976d9db0bf0",
+    "patches/04-display-window.patch": "994659e9475e2d159183157482fd04c5b6474b8f5b922f97bb18dc9b75f4a7df",
+    "pe-imports.json": "120dfb214329762fd688288360912dff1d8e82b5155f6f43b2a9776a31a325cc",
+    "README.md": "11d4332dca5703323a5340ff3eab33c8dbb2a4e9883bcbb33c588db357cda160",
+    "tests/region-index.cpp": "28b7aea6019317006e75e586cb2e196c14e881a15aad44b47193247a67b605d7",
+    "verify.py": "d69690616ea19539490adbcae2bce06db55776fd512be9f09420ac253e735efb",
+    "verify_windows_imports.py": "468d3eab16b16896e633771d645f7e7e05529713bb713e1105c68109cdcb1687"
+  }
+}

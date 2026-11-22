@@ -1,0 +1,1568 @@
+{
+  "renderer_sha256": "04f7bb0c500bc9b613310f6a49df1a70d74bb614de4f57e7df120985ca742dd4",
+  "imports": [
+    {
+      "library": "api-ms-win-core-synch-l1-2-0.dll",
+      "symbols": [
+        {
+          "name": "InitOnceExecuteOnce",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "Sleep",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "SleepConditionVariableCS",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "SleepConditionVariableSRW",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "WaitOnAddress",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "WakeAllConditionVariable",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "WakeByAddressSingle",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "WakeConditionVariable",
+          "hint_or_ordinal": 0
+        }
+      ]
+    },
+    {
+      "library": "KERNEL32.dll",
+      "symbols": [
+        {
+          "name": "AcquireSRWLockExclusive",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "AreFileApisANSI",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "AssignProcessToJobObject",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "AttachConsole",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "CloseHandle",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "CreateDirectoryW",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "CreateEventA",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "CreateEventW",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "CreateFileW",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "CreateHardLinkW",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "CreateJobObjectW",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "CreateMutexW",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "CreatePipe",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "CreateProcessW",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "CreateSemaphoreA",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "CreateSymbolicLinkW",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "CreateThread",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "CreateToolhelp32Snapshot",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "CreateWaitableTimerExW",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "DeleteCriticalSection",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "DeleteFileW",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "DeleteProcThreadAttributeList",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "DeviceIoControl",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "DuplicateHandle",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "EnterCriticalSection",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "FileTimeToSystemTime",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "FindClose",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "FindFirstFileW",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "FindNextFileW",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "FlsAlloc",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "FlsGetValue",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "FlsSetValue",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "FlushFileBuffers",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "FormatMessageA",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "FreeEnvironmentStringsW",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "FreeLibrary",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "GetACP",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "GetActiveProcessorCount",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "GetCommandLineW",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "GetConsoleScreenBufferInfo",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "GetCurrentDirectoryW",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "GetCurrentProcess",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "GetCurrentProcessId",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "GetCurrentThread",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "GetCurrentThreadId",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "GetDiskFreeSpaceExW",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "GetEnvironmentStringsW",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "GetEnvironmentVariableA",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "GetFileAttributesExW",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "GetFileAttributesW",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "GetFileInformationByHandle",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "GetFileInformationByHandleEx",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "GetFileSizeEx",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "GetFileTime",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "GetFinalPathNameByHandleW",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "GetHandleInformation",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "GetLargePageMinimum",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "GetLastError",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "GetLocaleInfoEx",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "GetModuleFileNameA",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "GetModuleFileNameW",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "GetModuleHandleA",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "GetModuleHandleExA",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "GetModuleHandleW",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "GetProcAddress",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "GetProcessAffinityMask",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "GetProcessIdOfThread",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "GetProcessTimes",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "GetStdHandle",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "GetSystemCpuSetInformation",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "GetSystemInfo",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "GetSystemTimeAdjustment",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "GetSystemTimeAsFileTime",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "GetSystemTimes",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "GetTempPathW",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "GetThreadContext",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "GetThreadId",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "GetThreadPriority",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "GetThreadTimes",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "GetTickCount",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "GetWindowsDirectoryA",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "GetWriteWatch",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "GlobalMemoryStatusEx",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "InitializeCriticalSection",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "InitializeCriticalSectionAndSpinCount",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "InitializeProcThreadAttributeList",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "K32EnumDeviceDrivers",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "K32EnumProcessModules",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "K32GetDeviceDriverBaseNameA",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "K32GetDeviceDriverFileNameA",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "K32GetModuleInformation",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "K32GetProcessImageFileNameA",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "LeaveCriticalSection",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "LoadLibraryA",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "LoadLibraryExA",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "LoadLibraryW",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "LocalFree",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "MoveFileExW",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "MoveFileW",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "MultiByteToWideChar",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "OpenProcess",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "OpenThread",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "OutputDebugStringA",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "QueryPerformanceCounter",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "QueryPerformanceFrequency",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "RaiseException",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "ReadFile",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "ReadProcessMemory",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "ReleaseMutex",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "ReleaseSRWLockExclusive",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "ReleaseSemaphore",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "ResetEvent",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "ResumeThread",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "RtlCaptureContext",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "RtlLookupFunctionEntry",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "RtlRestoreContext",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "RtlUnwindEx",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "RtlVirtualUnwind",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "SetConsoleTextAttribute",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "SetCurrentDirectoryW",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "SetEndOfFile",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "SetEnvironmentVariableA",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "SetEvent",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "SetFileAttributesW",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "SetFileInformationByHandle",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "SetFilePointerEx",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "SetFileTime",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "SetHandleInformation",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "SetInformationJobObject",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "SetLastError",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "SetProcessAffinityMask",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "SetProcessDefaultCpuSets",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "SetProcessInformation",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "SetSystemTime",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "SetThreadAffinityMask",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "SetThreadContext",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "SetThreadIdealProcessor",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "SetThreadPriority",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "SetWaitableTimerEx",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "SuspendThread",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "SwitchToThread",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "TerminateProcess",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "Thread32First",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "Thread32Next",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "TlsAlloc",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "TlsFree",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "TlsGetValue",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "TlsSetValue",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "TryAcquireSRWLockExclusive",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "TryEnterCriticalSection",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "UpdateProcThreadAttribute",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "VirtualAlloc",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "VirtualFree",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "VirtualProtect",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "VirtualQuery",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "VirtualQueryEx",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "WaitForMultipleObjects",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "WaitForSingleObject",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "WaitForSingleObjectEx",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "WideCharToMultiByte",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "WriteConsoleW",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "WriteFile",
+          "hint_or_ordinal": 0
+        }
+      ]
+    },
+    {
+      "library": "api-ms-win-crt-stdio-l1-1-0.dll",
+      "symbols": [
+        {
+          "name": "__acrt_iob_func",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "__stdio_common_vfprintf",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "__stdio_common_vfwprintf",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "__stdio_common_vsprintf",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "_close",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "_fileno",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "_fseeki64",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "_ftelli64",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "_get_osfhandle",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "_isatty",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "_wfopen",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "_wopen",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "fclose",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "feof",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "ferror",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "fflush",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "fgetc",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "fgetwc",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "fopen",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "fputc",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "fputs",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "fputwc",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "fread",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "freopen",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "fseek",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "ftell",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "fwrite",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "getc",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "setbuf",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "setvbuf",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "ungetc",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "ungetwc",
+          "hint_or_ordinal": 0
+        }
+      ]
+    },
+    {
+      "library": "api-ms-win-crt-heap-l1-1-0.dll",
+      "symbols": [
+        {
+          "name": "_aligned_free",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "_aligned_malloc",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "_msize",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "calloc",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "free",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "malloc",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "realloc",
+          "hint_or_ordinal": 0
+        }
+      ]
+    },
+    {
+      "library": "api-ms-win-crt-runtime-l1-1-0.dll",
+      "symbols": [
+        {
+          "name": "_Exit",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "__sys_nerr",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "_assert",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "_beginthreadex",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "_endthreadex",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "_errno",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "_execute_onexit_table",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "_fpreset",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "_initialize_onexit_table",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "_initterm",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "_initterm_e",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "_register_onexit_function",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "_set_errno",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "abort",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "exit",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "strerror",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "strerror_s",
+          "hint_or_ordinal": 0
+        }
+      ]
+    },
+    {
+      "library": "api-ms-win-crt-time-l1-1-0.dll",
+      "symbols": [
+        {
+          "name": "_localtime64_s",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "_strftime_l",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "_time64",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "strftime",
+          "hint_or_ordinal": 0
+        }
+      ]
+    },
+    {
+      "library": "api-ms-win-crt-environment-l1-1-0.dll",
+      "symbols": [
+        {
+          "name": "getenv",
+          "hint_or_ordinal": 0
+        }
+      ]
+    },
+    {
+      "library": "api-ms-win-crt-private-l1-1-0.dll",
+      "symbols": [
+        {
+          "name": "__intrinsic_setjmp",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "longjmp",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "memchr",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "memcmp",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "memcpy",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "memmove",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "strchr",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "strstr",
+          "hint_or_ordinal": 0
+        }
+      ]
+    },
+    {
+      "library": "api-ms-win-crt-string-l1-1-0.dll",
+      "symbols": [
+        {
+          "name": "_iswalpha_l",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "_iswcntrl_l",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "_iswdigit_l",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "_iswlower_l",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "_iswprint_l",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "_iswpunct_l",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "_iswspace_l",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "_iswupper_l",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "_iswxdigit_l",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "_strcoll_l",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "_strdup",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "_strxfrm_l",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "_tolower_l",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "_toupper_l",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "_towlower_l",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "_towupper_l",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "_wcscoll_l",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "_wcsxfrm_l",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "isalnum",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "isdigit",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "isspace",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "isxdigit",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "mbrlen",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "memset",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "strcmp",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "strcpy",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "strlen",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "strncat",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "strncmp",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "strncpy",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "strnlen",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "tolower",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "toupper",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "wcscmp",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "wcscpy",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "wcslen",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "wcsncmp",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "wcsnlen",
+          "hint_or_ordinal": 0
+        }
+      ]
+    },
+    {
+      "library": "api-ms-win-crt-math-l1-1-0.dll",
+      "symbols": [
+        {
+          "name": "_fdopen",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "ceilf",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "cosf",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "exp2f",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "log2f",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "lroundf",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "pow",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "powf",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "sinf",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "sqrtf",
+          "hint_or_ordinal": 0
+        }
+      ]
+    },
+    {
+      "library": "api-ms-win-crt-convert-l1-1-0.dll",
+      "symbols": [
+        {
+          "name": "_strtod_l",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "atoi",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "mbrtowc",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "mbsrtowcs",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "mbstowcs",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "strtod",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "strtof",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "strtol",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "strtoll",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "strtoul",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "strtoull",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "wcrtomb",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "wcrtomb_s",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "wcstod",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "wcstol",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "wcstoll",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "wcstombs",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "wcstoul",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "wcstoull",
+          "hint_or_ordinal": 0
+        }
+      ]
+    },
+    {
+      "library": "api-ms-win-crt-locale-l1-1-0.dll",
+      "symbols": [
+        {
+          "name": "___lc_codepage_func",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "___mb_cur_max_func",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "__pctype_func",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "_configthreadlocale",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "_create_locale",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "_free_locale",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "localeconv",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "setlocale",
+          "hint_or_ordinal": 0
+        }
+      ]
+    },
+    {
+      "library": "api-ms-win-crt-multibyte-l1-1-0.dll",
+      "symbols": [
+        {
+          "name": "_mbtowc_l",
+          "hint_or_ordinal": 0
+        }
+      ]
+    },
+    {
+      "library": "api-ms-win-crt-filesystem-l1-1-0.dll",
+      "symbols": [
+        {
+          "name": "_fstat64i32",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "_lock_file",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "_stat64i32",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "_unlock_file",
+          "hint_or_ordinal": 0
+        }
+      ]
+    },
+    {
+      "library": "ADVAPI32.dll",
+      "symbols": [
+        {
+          "name": "AdjustTokenPrivileges",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "CloseTrace",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "ControlTraceA",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "EnableTraceEx2",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "EnumerateTraceGuidsEx",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "GetTokenInformation",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "GetUserNameA",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "LookupPrivilegeValueA",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "OpenProcessToken",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "OpenTraceA",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "ProcessTrace",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "RegGetValueW",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "StartTraceA",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "TraceSetInformation",
+          "hint_or_ordinal": 0
+        }
+      ]
+    },
+    {
+      "library": "Secur32.dll",
+      "symbols": [
+        {
+          "name": "GetUserNameExA",
+          "hint_or_ordinal": 0
+        }
+      ]
+    },
+    {
+      "library": "dbghelp.dll",
+      "symbols": [
+        {
+          "name": "SymFromAddr",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "SymGetLineFromAddr64",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "SymGetOptions",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "SymInitialize",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "SymLoadModuleEx",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "SymSetOptions",
+          "hint_or_ordinal": 0
+        }
+      ]
+    },
+    {
+      "library": "WS2_32.dll",
+      "symbols": [
+        {
+          "name": "WSAGetLastError",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "WSAPoll",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "WSAStartup",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "accept",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "bind",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "closesocket",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "connect",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "freeaddrinfo",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "getaddrinfo",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "gethostname",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "getsockopt",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "htons",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "inet_ntop",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "inet_pton",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "ioctlsocket",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "listen",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "recv",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "recvfrom",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "send",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "sendto",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "setsockopt",
+          "hint_or_ordinal": 0
+        },
+        {
+          "name": "socket",
+          "hint_or_ordinal": 0
+        }
+      ]
+    },
+    {
+      "library": "USER32.dll",
+      "symbols": [
+        {
+          "name": "MessageBoxA",
+          "hint_or_ordinal": 0
+        }
+      ]
+    },
+    {
+      "library": "SHELL32.dll",
+      "symbols": [
+        {
+          "name": "CommandLineToArgvW",
+          "hint_or_ordinal": 0
+        }
+      ]
+    }
+  ],
+  "exports": [
+    {
+      "ordinal": 1,
+      "name": "KytyDllCreate"
+    }
+  ],
+  "scope": "Declared PE imports/exports only; no runtime dependency resolution or import ABI proof."
+}

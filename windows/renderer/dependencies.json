@@ -1,0 +1,273 @@
+{
+  "gitlinks": [
+    {
+      "path": "3rdparty/LibAtrac9",
+      "commit": "946e05a9212976626a9f5e52f29c0a7202871f29",
+      "url": "https://github.com/shadps4-emu/ext-LibAtrac9.git",
+      "snapshot_dependency_bytes_verified": false
+    },
+    {
+      "path": "3rdparty/SDL2",
+      "commit": "74be4c2836da0940f0144d0d97852606f9ab11e9",
+      "url": "https://github.com/libsdl-org/SDL.git",
+      "snapshot_dependency_bytes_verified": false
+    },
+    {
+      "path": "3rdparty/SPIRV-Headers",
+      "commit": "b824a462d4256d720bebb40e78b9eb8f78bbb305",
+      "url": "https://github.com/KhronosGroup/SPIRV-Headers.git",
+      "snapshot_dependency_bytes_verified": false
+    },
+    {
+      "path": "3rdparty/SPIRV-Tools",
+      "commit": "262bdab48146c937467f826699a40da0fdfc0f1a",
+      "url": "https://github.com/KhronosGroup/SPIRV-Tools.git",
+      "snapshot_dependency_bytes_verified": false
+    },
+    {
+      "path": "3rdparty/Vulkan-Headers",
+      "commit": "2fa203425eb4af9dfc6b03f97ef72b0b5bcb8350",
+      "url": "https://github.com/KhronosGroup/Vulkan-Headers.git",
+      "snapshot_dependency_bytes_verified": false
+    },
+    {
+      "path": "3rdparty/VulkanMemoryAllocator",
+      "commit": "a1d434708c217b2a6c7b365f1fe41fa03a562e59",
+      "url": "https://github.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator.git",
+      "snapshot_dependency_bytes_verified": false
+    },
+    {
+      "path": "3rdparty/ZArchive",
+      "commit": "965b66c8d67b6b7e30fd63b3b75aa91a99ff303b",
+      "url": "https://github.com/Exzap/ZArchive.git",
+      "snapshot_dependency_bytes_verified": false
+    },
+    {
+      "path": "3rdparty/cairo",
+      "commit": "3909090108bb2db55330e3eb148aebe664735363",
+      "url": "https://gitlab.freedesktop.org/cairo/cairo.git",
+      "snapshot_dependency_bytes_verified": false
+    },
+    {
+      "path": "3rdparty/curl",
+      "commit": "801bd5138ce31aa0d906fa4e2eabfc599d74e793",
+      "url": "https://github.com/curl/curl.git",
+      "snapshot_dependency_bytes_verified": false
+    },
+    {
+      "path": "3rdparty/ffmpeg-core",
+      "commit": "9ac4cfd195f192ed8b08566f49c28dbb48d08341",
+      "url": "https://github.com/KytyPS5/ext-ffmpeg-core.git",
+      "snapshot_dependency_bytes_verified": false
+    },
+    {
+      "path": "3rdparty/fmt",
+      "commit": "11ddbcb7898d2d3445d431a54814367b21dee6ad",
+      "url": "https://github.com/fmtlib/fmt.git",
+      "snapshot_dependency_bytes_verified": false
+    },
+    {
+      "path": "3rdparty/fontconfig",
+      "commit": "72b9a48f57de6204d99ce1c217b5609ee92ece9b",
+      "url": "https://github.com/fontconfig/fontconfig.git",
+      "snapshot_dependency_bytes_verified": false
+    },
+    {
+      "path": "3rdparty/freetype",
+      "commit": "37515cf56ba3349656049edbed89ffc6f6466f2d",
+      "url": "https://github.com/freetype/freetype.git",
+      "snapshot_dependency_bytes_verified": false
+    },
+    {
+      "path": "3rdparty/glslang",
+      "commit": "ba1640446f3826a518721d1f083f3a8cca1120c3",
+      "url": "https://github.com/KhronosGroup/glslang.git",
+      "snapshot_dependency_bytes_verified": false
+    },
+    {
+      "path": "3rdparty/harfbuzz",
+      "commit": "a1d9bfe62818ef0fa9cf63b6e6d51436b1c93cbc",
+      "url": "https://github.com/harfbuzz/harfbuzz.git",
+      "snapshot_dependency_bytes_verified": false
+    },
+    {
+      "path": "3rdparty/icu",
+      "commit": "049e0d6a420629ac7db77256987d083a563287b5",
+      "url": "https://github.com/unicode-org/icu.git",
+      "snapshot_dependency_bytes_verified": false
+    },
+    {
+      "path": "3rdparty/jxrlib",
+      "commit": "f7521879862b9085318e814c6157490dd9dbbdb4",
+      "url": "https://github.com/4creators/jxrlib.git",
+      "snapshot_dependency_bytes_verified": false
+    },
+    {
+      "path": "3rdparty/libfvad",
+      "commit": "532ab666c20d3cfda38bca63abbb0f152706c369",
+      "url": "https://github.com/dpirch/libfvad.git",
+      "snapshot_dependency_bytes_verified": false
+    },
+    {
+      "path": "3rdparty/libjpeg-turbo",
+      "commit": "c85e6b905bf237038faa936dab160ebfc5da0344",
+      "url": "https://github.com/libjpeg-turbo/libjpeg-turbo.git",
+      "snapshot_dependency_bytes_verified": false
+    },
+    {
+      "path": "3rdparty/libpng",
+      "commit": "cd952f49f95bb27154ae77dbb103032d95f6e580",
+      "url": "https://github.com/pnggroup/libpng.git",
+      "snapshot_dependency_bytes_verified": false
+    },
+    {
+      "path": "3rdparty/libpsl",
+      "commit": "ba4c49a205408845834b1648ad23c15ee09f722b",
+      "url": "https://github.com/rockdaboot/libpsl.git",
+      "snapshot_dependency_bytes_verified": false
+    },
+    {
+      "path": "3rdparty/libressl-openbsd",
+      "commit": "078b3d1df8ca2011c1605cd40418c58fa0f5b143",
+      "url": "https://github.com/libressl/openbsd.git",
+      "snapshot_dependency_bytes_verified": false
+    },
+    {
+      "path": "3rdparty/libusb-cmake",
+      "commit": "bea6567b63796ab27c1c33257d230284fb2d8316",
+      "url": "https://github.com/libusb/libusb-cmake.git",
+      "snapshot_dependency_bytes_verified": false
+    },
+    {
+      "path": "3rdparty/libwpe",
+      "commit": "b90a8396864c9824a43838a5879f6ab01420c69e",
+      "url": "https://github.com/WebPlatformForEmbedded/libwpe.git",
+      "snapshot_dependency_bytes_verified": false
+    },
+    {
+      "path": "3rdparty/libxml2",
+      "commit": "7846b0a677f8d3ce72486125fa281e92ac9970e8",
+      "url": "https://github.com/GNOME/libxml2.git",
+      "snapshot_dependency_bytes_verified": false
+    },
+    {
+      "path": "3rdparty/magic_enum",
+      "commit": "1384769c66bd16ec9bb1353f45fe8ec8ccc12dbd",
+      "url": "https://github.com/Neargye/magic_enum.git",
+      "snapshot_dependency_bytes_verified": false
+    },
+    {
+      "path": "3rdparty/mbedtls",
+      "commit": "068ff080b369adfac81509f9b57b2afabaf82dc5",
+      "url": "https://github.com/Mbed-TLS/mbedtls.git",
+      "snapshot_dependency_bytes_verified": false
+    },
+    {
+      "path": "3rdparty/mimalloc",
+      "commit": "f8401befa675adb13b98decababd7fdc59572477",
+      "url": "https://github.com/microsoft/mimalloc.git",
+      "snapshot_dependency_bytes_verified": false
+    },
+    {
+      "path": "3rdparty/nghttp2",
+      "commit": "85e300c79fb6dbcfa9c1013215c8710c1c2cd3d2",
+      "url": "https://github.com/nghttp2/nghttp2.git",
+      "snapshot_dependency_bytes_verified": false
+    },
+    {
+      "path": "3rdparty/ogg",
+      "commit": "be05b13e98b048f0b5a0f5fa8ce514d56db5f822",
+      "url": "https://github.com/xiph/ogg.git",
+      "snapshot_dependency_bytes_verified": false
+    },
+    {
+      "path": "3rdparty/opus",
+      "commit": "22244de5a79bd1d6d623c32e72bf1954b56235be",
+      "url": "https://github.com/xiph/opus.git",
+      "snapshot_dependency_bytes_verified": false
+    },
+    {
+      "path": "3rdparty/pixman",
+      "commit": "37216a32839f59e8dcaa4c3951b3fcfc3f07852c",
+      "url": "https://gitlab.freedesktop.org/pixman/pixman.git",
+      "snapshot_dependency_bytes_verified": false
+    },
+    {
+      "path": "3rdparty/quickjs",
+      "commit": "6d46d07d04041b40f4f49eaa7fdebe44c314c699",
+      "url": "https://github.com/quickjs-ng/quickjs.git",
+      "snapshot_dependency_bytes_verified": false
+    },
+    {
+      "path": "3rdparty/sqlite",
+      "commit": "57520227c95396ce39ba6ecaac8d475b78dd3964",
+      "url": "https://github.com/sqlite/sqlite.git",
+      "snapshot_dependency_bytes_verified": false
+    },
+    {
+      "path": "3rdparty/stb",
+      "commit": "2c980bb59875b0d32144a71867fbdebb2f77cd20",
+      "url": "https://github.com/nothings/stb.git",
+      "snapshot_dependency_bytes_verified": false
+    },
+    {
+      "path": "3rdparty/tracy",
+      "commit": "30997d5ca6bb632cc10807a1da8a6d3de0aeeb3c",
+      "url": "https://github.com/wolfpld/tracy.git",
+      "snapshot_dependency_bytes_verified": false
+    },
+    {
+      "path": "3rdparty/vgmstream",
+      "commit": "7c520e8f9b078dfde2f84f1b5bcbad0c6c415806",
+      "url": "https://github.com/vgmstream/vgmstream.git",
+      "snapshot_dependency_bytes_verified": false
+    },
+    {
+      "path": "3rdparty/vorbis",
+      "commit": "c2aa86b05e981c96bf381fc6aa11cdd03eccc2fb",
+      "url": "https://github.com/xiph/vorbis.git",
+      "snapshot_dependency_bytes_verified": false
+    },
+    {
+      "path": "3rdparty/xbyak",
+      "commit": "44a72f369268f7d552650891b296693e91db86bb",
+      "url": "https://github.com/herumi/xbyak.git",
+      "snapshot_dependency_bytes_verified": false
+    },
+    {
+      "path": "3rdparty/xxHash",
+      "commit": "e573d4d2aaeaba0f3e5a0a9a54144a1f2b4b56e7",
+      "url": "https://github.com/Cyan4973/xxHash.git",
+      "snapshot_dependency_bytes_verified": false
+    },
+    {
+      "path": "3rdparty/zlib",
+      "commit": "da607da739fa6047df13e66a2af6b8bec7c2a498",
+      "url": "https://github.com/madler/zlib.git",
+      "snapshot_dependency_bytes_verified": false
+    },
+    {
+      "path": "3rdparty/zstd",
+      "commit": "f8745da6ff1ad1e7bab384bd1f9d742439278e99",
+      "url": "https://github.com/facebook/zstd.git",
+      "snapshot_dependency_bytes_verified": false
+    },
+    {
+      "path": "3rdparty/zydis",
+      "commit": "120e0e705f8e3b507dc49377ac2879979f0d545c",
+      "url": "https://github.com/zyantific/zydis.git",
+      "snapshot_dependency_bytes_verified": false
+    }
+  ],
+  "vendored_trees": [
+    {
+      "path": "3rdparty/FidelityFX-FSR",
+      "tree": "a23ae4b64d1f45d210bbb6aa63926fa8e49487d6"
+    },
+    {
+      "path": "3rdparty/ffx-api",
+      "tree": "612e01b40651c06dbb04ac9385f2f0b8e1daeb31"
+    }
+  ],
+  "scope": "Recorded Git tree identities; copied build dependency contents were not independently verified."
+}

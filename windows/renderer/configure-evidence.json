@@ -1,0 +1,37 @@
+{
+  "root_cmake_configure": "passed; reconfigured after display patch",
+  "renderer_cmake_configure": "passed with locally generated LDS header",
+  "compile_or_link": {
+    "target": "kyty_gpu_dll_bundle",
+    "renderer_sha256": "d9104c28e78f7d592a1d821bd94c43d008ef3b36968329cee366d505b2222a57",
+    "renderer_bytes": 213528064,
+    "build_exit": 0,
+    "abi_load_exit": 0,
+    "host_display_translation_unit": "compiled"
+  },
+  "build_parallelism": "idle priority, two logical E-cores",
+  "renderer_profile_mode": "KYTY_DLL_PGO=OFF; KYTY_PGO_PROFILE independently supplied",
+  "measured_inner_compile_flags": [
+    "-O3",
+    "-DNDEBUG",
+    "-flto=thin",
+    "-fprofile-use=<shared-indexed-profile>"
+  ],
+  "measured_inner_link_flags": [
+    "-O3",
+    "-DNDEBUG",
+    "-shared",
+    "-flto=thin"
+  ],
+  "configured_profile_sha256": "4a7c8ad1b5337d41bfe1e4659b861d497205e0dd2c2dad45320a6628d97ca1f6",
+  "profile_matches_measured_indexed_profile": true,
+  "profile_warning": "68 changed and 14 new Kyty sources since profile training",
+  "ffmpeg": {
+    "recorded_gitlink": "9ac4cfd195f192ed8b08566f49c28dbb48d08341",
+    "source_snapshot_avcodec_header_sha256": "6552ee6525010cb688be94e57a32a6fb4ac890440f68373ba828ada9fbeea85f3",
+    "local_revision_named_prebuilt_avcodec_header_sha256": "d6dbc9694974237888592f71020092c4594511e762d609b0076a90e9696ad1b1",
+    "recorded_prebuilt_copy_available": false,
+    "replacement_is_recorded_prebuilt": "unverified"
+  },
+  "limits": "The complete Windows host was not linked in this check. The rebuilt renderer and the measured renderer have different SHA-256 hashes."
+}

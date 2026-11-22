@@ -1,0 +1,132 @@
+--- a/core/libs/prx/libSceVideoOut/src/DisplayWindow.cpp
++++ b/core/libs/prx/libSceVideoOut/src/DisplayWindow.cpp
+@@ -1,6 +1,6 @@
++#include "SarosNativeScale.hpp"
+ #include "prx/libSceVideoOut/include/DisplayWindow.hpp"
+ #include "prx/libSceVideoOut/include/Telemetry.hpp"
+-#include "prx/libSceVideoOut/include/WindowTitleUpdate.hpp"
+ #include "prx/libSceAgcDriver/Execution/include/AspectFit.hpp"
+ #include "prx/libSceAgcDriver/Execution/include/Driver.hpp"
+ #include "prx/libSceMouse/include/MouseState.hpp"
+@@ -10,6 +10,7 @@
+ #include <chrono>
+ #include <cstdio>
+ #include <cstdlib>
++#include <cstring>
+ #include <span>
+ #include <stdexcept>
+ #include <string>
+@@ -49,14 +50,14 @@
+ 
+ class SdlHostWindow final : public IHostFullscreenWindow {
+ public:
+-    explicit SdlHostWindow(SDL_Window* window) : window(window) {}
++    SdlHostWindow(SDL_Window* window, Uint32 fullscreenFlag) : window(window), fullscreenFlag(fullscreenFlag) {}
+ 
+     bool IsFullscreen() const override {
+         return (SDL_GetWindowFlags(window) & SDL_WINDOW_FULLSCREEN) != 0;
+     }
+ 
+     void SetFullscreen(bool fullscreen) override {
+-        require(SDL_SetWindowFullscreen(window, fullscreen ? static_cast<Uint32>(SDL_WINDOW_FULLSCREEN_DESKTOP) : 0u) == 0, SDL_GetError());
++        require(SDL_SetWindowFullscreen(window, fullscreen ? fullscreenFlag : 0u) == 0, SDL_GetError());
+     }
+ 
+     HostWindowSize Size() const override {
+@@ -75,6 +76,7 @@
+ 
+ private:
+     SDL_Window* window;
++    Uint32 fullscreenFlag;
+ };
+ 
+ #ifdef _WIN32
+@@ -109,14 +111,42 @@
+     if (unrecognizedFullscreen) std::fprintf(stderr, "%s\n", HostFullscreenWarning(fullscreenSetting).c_str());
+     const auto title = GetAppTitle_nid_postfix();
+     AgcDriverLockVulkanLoader_nid_postfix();
+-    const auto fullscreenFlag = fullscreenMode == HostFullscreenMode::Borderless ? static_cast<Uint32>(SDL_WINDOW_FULLSCREEN_DESKTOP) : 0u;
+-    window = SDL_CreateWindow(title.value, SDL_WINDOWPOS_CENTERED_DISPLAY(displayIndex), SDL_WINDOWPOS_CENTERED_DISPLAY(displayIndex), static_cast<int>(initialSize.width), static_cast<int>(initialSize.height), SDL_WINDOW_SHOWN | SDL_WINDOW_VULKAN | SDL_WINDOW_RESIZABLE | SDL_WINDOW_ALLOW_HIGHDPI | fullscreenFlag);
++    const char* exclusiveSetting = std::getenv("SAROS_EXCLUSIVE_1440P120");
++    const bool requestExclusive = fullscreenMode == HostFullscreenMode::Borderless &&
++                                  exclusiveSetting != nullptr && std::strcmp(exclusiveSetting, "1") == 0;
++    Uint32 fullscreenFlag = SDL_WINDOW_FULLSCREEN_DESKTOP;
++    const Uint32 creationFlag = fullscreenMode == HostFullscreenMode::Borderless && !requestExclusive ? fullscreenFlag : 0u;
++    window = SDL_CreateWindow(title.value, SDL_WINDOWPOS_CENTERED_DISPLAY(displayIndex), SDL_WINDOWPOS_CENTERED_DISPLAY(displayIndex), static_cast<int>(initialSize.width), static_cast<int>(initialSize.height), SDL_WINDOW_SHOWN | SDL_WINDOW_VULKAN | SDL_WINDOW_RESIZABLE | SDL_WINDOW_ALLOW_HIGHDPI | creationFlag);
+     AgcDriverUnlockVulkanLoader_nid_postfix();
+     require(window != nullptr, SDL_GetError());
+     SDL_SetWindowMinimumSize(window, static_cast<int>(DisplayWindowMinimumWidth), static_cast<int>(DisplayWindowMinimumHeight));
++    if (requestExclusive) {
++        SDL_DisplayMode request{};
++        request.w = 2560;
++        request.h = 1440;
++        request.refresh_rate = 120;
++        SDL_DisplayMode supported{};
++        if (SDL_GetClosestDisplayMode(displayIndex, &request, &supported) &&
++            supported.w == request.w && supported.h == request.h && supported.refresh_rate == request.refresh_rate &&
++            SDL_SetWindowDisplayMode(window, &supported) == 0 && SDL_SetWindowFullscreen(window, SDL_WINDOW_FULLSCREEN) == 0) {
++            fullscreenFlag = SDL_WINDOW_FULLSCREEN;
++        } else {
++            std::fprintf(stderr, "[saros-display] exclusive 2560x1440@120 unavailable, using borderless desktop\n");
++            SDL_SetWindowDisplayMode(window, nullptr);
++            require(SDL_SetWindowFullscreen(window, fullscreenFlag) == 0, SDL_GetError());
++        }
++        SDL_DisplayMode current{};
++        int drawableW = 0, drawableH = 0;
++        SDL_Vulkan_GetDrawableSize(window, &drawableW, &drawableH);
++        if (SDL_GetCurrentDisplayMode(displayIndex, &current) == 0) {
++            std::fprintf(stderr, "[saros-display] mode=%s active=%dx%d@%d drawable=%dx%d\n",
++                         fullscreenFlag == SDL_WINDOW_FULLSCREEN ? "exclusive" : "desktop",
++                         current.w, current.h, current.refresh_rate, drawableW, drawableH);
++        }
++    }
+     applyAppIcon(window);
+     installSubclass();
+-    hostWindow = std::make_unique<SdlHostWindow>(window);
++    hostWindow = std::make_unique<SdlHostWindow>(window, fullscreenFlag);
+     fullscreen = std::make_unique<HostFullscreenState>(*hostWindow);
+     fullscreen->Adopt(fullscreenMode, HostWindowSize{static_cast<int>(initialSize.width), static_cast<int>(initialSize.height)});
+ }
+@@ -161,7 +191,11 @@
+ 
+ namespace {
+ bool TitleEveryFrame() {
++#ifdef _WIN32
++    return true;
++#else
+     return std::getenv("APS5_TITLE_EVERY_FRAME") != nullptr;
++#endif
+ }
+ }
+ 
+@@ -172,23 +206,26 @@
+     static std::uint64_t fpsFrames = 0;
+     static double currentFps = 0.0;
+     static const bool everyFrame = TitleEveryFrame();
++    static auto titleSet = std::chrono::steady_clock::time_point{};
+     const auto now = std::chrono::steady_clock::now();
+     frameNum++;
+     fpsFrames++;
+     const double elapsed = std::chrono::duration<double>(now - fpsStart).count();
+-    bool fpsWindowClosed = false;
+     if (elapsed >= 2.0) {
+         currentFps = static_cast<double>(fpsFrames) / elapsed;
+         fpsStart = now;
+         fpsFrames = 0;
+-        fpsWindowClosed = true;
+-    }
+-    if (everyFrame || WindowTitleUpdate::ShouldPush(frameNum, fpsWindowClosed)) {
++    }
++    if (everyFrame || frameNum == 1 || now - titleSet >= std::chrono::seconds(1)) {
+         char text[160];
+         std::snprintf(text, sizeof(text), "%s | FPS: %.2f (%llu)", title.value, currentFps, static_cast<unsigned long long>(frameNum));
+         SDL_SetWindowTitle(window, text);
++        titleSet = now;
+     }
+     if (fullscreen) fullscreen->Refresh(MouseIsOpen_nid_no_patch());
++#ifdef _WIN32
++    SarosNativeScale::update(frameNum);
++#endif
+     if (auto* telemetry = VideoOutTelemetry::Instance(); telemetry != nullptr && (frameNum == 1 || frameNum % 30 == 0)) telemetry->EmitPresent(frameNum, currentFps);
+ }
+ 

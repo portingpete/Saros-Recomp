@@ -23,6 +23,10 @@ python windows/recompile_guest.py --relinker build-relinker/core/relinker/relink
 
 The script recognizes the measured title by its hash, sets its two back-buffer dimensions to 2560 × 1440 in a temporary copy and runs the Intel-compatible Windows conversion with frame red zones. A successful build prints `Verified 41 Windows images`. The executable is `Saros.exe` and the modules are under `app0/prx` and `app0/sce_module`. [Output hashes](guest-files.json)
 
+## Build the renderer
+
+The milestone renderer source, private-input generators and Windows build commands are available separately. A fresh renderer linked and passed its ABI check. The published performance result uses the historical binary identified in the benchmark record. [Windows renderer build](renderer/README.md)
+
 ## Build the native display profile
 
 Place your installed content under `app0` in the output directory. The overlay builder reads two configuration entries from your local content pak, sets native 2560 × 1440 rendering, disables frame generation and sets the cap to 120. It verifies both entries and the finished pak against the measured build. Use the Windows release of repak 0.2.3. [repak release](https://github.com/trumank/repak/releases/tag/v0.2.3)
@@ -42,3 +46,5 @@ python windows/run_milestone.py --play D:/Saros-Windows
 ```
 
 The launcher supplies the splash and movie skip flags and enables the host's intro seek. It starts the game with four lighting and effects groups at level 1 and writes its settings to a temporary INI for the session. The game loads the progression stored in your checkpoint. The recorded average covers player movement after the prologue had loaded. [Launcher environment](30fps-environment.json)
+
+The historical host uses the Windows desktop size for borderless presentation. On a 3440 × 1440 desktop, the guest reported 2560 × 1440 at 100% and the Windows drawable was 3440 × 1440. For a 2560 × 1440 borderless drawable, use that Windows display mode.

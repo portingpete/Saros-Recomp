@@ -1,0 +1,114 @@
+--- a/core/kyty/graphics/host_gpu/renderer/cache/bufferCache.cpp
++++ b/core/kyty/graphics/host_gpu/renderer/cache/bufferCache.cpp
+@@ -1,3 +1,4 @@
++#include "regionBufferIndex.h"
+ #include "graphics/host_gpu/renderer/cache/bufferCache.h"
+ 
+ #include "common/alignment.h"
+@@ -38,6 +39,8 @@
+ namespace {
+ 
+ constexpr uint64_t MiB           = 1024 * 1024;
++std::atomic<uint64_t> buffer_index_lifetime{1};
++
+ constexpr uint64_t GdsBufferSize = 64 * 1024;
+ 
+ std::pair<Buffer*, uint64_t> UploadMemory(GraphicContext& graphics, CommandScheduler& scheduler,
+@@ -363,6 +366,7 @@
+       m_download_buffer(graphics, scheduler, MemoryUsage::Download, 64 * MiB),
+       m_device_buffer(graphics, scheduler, MemoryUsage::DeviceLocal, 128 * MiB),
+       m_texture_cache(texture_cache) {
++	buffer_index_lifetime.fetch_add(1,std::memory_order_acq_rel);
+ 	std::memset(m_gds_buffer.Mapped().data(), 0, static_cast<size_t>(m_gds_buffer.Size()));
+ 	m_gds_buffer.Flush(0, m_gds_buffer.Size());
+ 	SetVulkanObjectNameF(m_graphics.device, m_bda_pagetable_buffer.Handle(),
+@@ -3611,7 +3615,41 @@
+ 	m_memory_tracker.ForEachCpuDirtySpan(vaddr, size, MaxGap, [&](uint64_t span, uint64_t bytes) {
+ 		m_span_buffers.clear();
+ 		m_span_ranges.clear();
+-		CollectSpanBuffers(span, bytes, m_span_buffers, m_span_ranges);
++		static const bool indexed=[] {
++            const char* value=std::getenv("KYTY_SAROS_REGION_BUFFER_INDEX");
++            return value && std::strcmp(value,"1")==0;
++        }();
++        if (indexed && GuestRange{span,bytes}.Valid() &&
++            span/TRACKER_REGION_SIZE==(span+bytes-1)/TRACKER_REGION_SIZE) {
++            static thread_local RegionBufferIndex<BufferId> index;
++            const auto region=span/TRACKER_REGION_SIZE;
++            const auto region_begin=region*TRACKER_REGION_SIZE;
++            const auto region_end=region_begin+TRACKER_REGION_SIZE;
++            index.Visit(this,buffer_index_lifetime.load(std::memory_order_acquire),region,
++                RegionRegistrationEpoch(span),span,span+bytes,
++                [&](const auto& add) {
++                    auto it=m_buffers.upper_bound(region_begin);
++                    if (it!=m_buffers.begin()) --it;
++                    for (;it!=m_buffers.end() && it->first<region_end;++it) {
++                        const auto& buffer=m_slot_buffers[it->second];
++                        add(buffer.CpuAddress(),buffer.CpuAddress()+buffer.Size(),it->second);
++                    }
++                },
++                [&](BufferId id,uint64_t first,uint64_t length) {
++                    m_span_buffers.push_back(&m_slot_buffers[id]);
++                    m_span_ranges.emplace_back(first,length);
++                });
++            static thread_local uint64_t calls=0;
++            if (std::has_single_bit(++calls)) {
++                std::vector<Buffer*> expected;
++                std::vector<std::pair<uint64_t,uint64_t>> ranges;
++                CollectSpanBuffers(span,bytes,expected,ranges);
++                EXIT_IF(expected!=m_span_buffers || ranges!=m_span_ranges);
++                std::fprintf(stderr,"[saros-region-index] matched_calls=%" PRIu64 "\n",calls);
++            }
++        } else {
++            CollectSpanBuffers(span,bytes,m_span_buffers,m_span_ranges);
++        }
+ 		if (m_span_buffers.size() == 1) {
+ 			(void)SynchronizeBuffer(*m_span_buffers[0], m_span_ranges[0].first,
+ 			                        m_span_ranges[0].second, false, false);
+--- /dev/null
++++ b/core/kyty/graphics/host_gpu/renderer/cache/regionBufferIndex.h
+@@ -0,0 +1,44 @@
++#pragma once
++#include <algorithm>
++#include <array>
++#include <cstddef>
++#include <cstdint>
++#include <vector>
++
++template<class Id, size_t Slots=1024>
++class RegionBufferIndex {
++    struct Segment { uint64_t begin,end; Id id; };
++    struct Region {
++        std::vector<Segment> entries;
++        const void* owner=nullptr;
++        uint64_t generation=0, region=0, epoch=0;
++    };
++    std::array<Region,Slots> regions;
++public:
++    template<class Populate,class Emit>
++    void Visit(const void* owner,uint64_t generation,uint64_t region,uint64_t epoch,
++               uint64_t begin,uint64_t end,Populate&& populate,Emit&& emit) {
++        static_assert((Slots&(Slots-1))==0);
++        auto& slot=regions[(region^(region>>10)^(region>>20))&(Slots-1)];
++        if (slot.owner!=owner || slot.generation!=generation || slot.region!=region || slot.epoch!=epoch) {
++            slot.entries.clear();
++            populate([&](uint64_t first,uint64_t after,Id id) {
++                slot.entries.push_back({first,after,id});
++            });
++            slot.owner=owner;
++            slot.generation=generation;
++            slot.region=region;
++            slot.epoch=epoch;
++        }
++        // Match map::upper_bound(begin) and its predecessor, including holes, empty
++        // regions, long buffers which began in an earlier region, and exact boundaries.
++        auto it=std::upper_bound(slot.entries.begin(),slot.entries.end(),begin,
++                                 [](uint64_t value,const Segment& item){return value<item.begin;});
++        if(it!=slot.entries.begin()) --it;
++        for(;it!=slot.entries.end() && it->begin<end;++it) {
++            const auto first=std::max(begin,it->begin);
++            const auto after=std::min(end,it->end);
++            if(first<after) emit(it->id,first,after-first);
++        }
++    }
++};

@@ -1,0 +1,547 @@
+# Kyty code in AnyPS5
+
+`core/kyty/` and `core/libs/prx/libSceAgcDriver/KytyShim/include/` hold the Kyty core. `core/kyty` is maintained in this repository; it derives from [KytyPS5](https://github.com/KytyPS5/KytyPS5) (GPL-2.0).
+It is the second GPU driver of plan B, built only with
+`-DANYPS5_GPU_BACKEND=kyty`; the default `-DANYPS5_GPU_BACKEND=anyps5` builds AnyPS5 exactly as before and reads none of
+these files.
+
+## Licence
+
+The Kyty core is distributed under the GNU General Public License version 2, copied in
+[core/kyty/LICENSE](../../core/kyty/LICENSE). The original Kyty code by InoriRus was published under the MIT licence, copied
+in [core/kyty/LICENSES/Kyty-MIT.txt](../../core/kyty/LICENSES/Kyty-MIT.txt). Two files carry a notice of their own, kept
+verbatim at their top:
+
+| File | Notice |
+|---|---|
+| `core/kyty/common/alignment.h` | 2014 Jannik Vogel, CC0-1.0 |
+| `core/kyty/graphics/host_gpu/shaders/fault_buffer_process.comp` | 2024 shadPS4 Emulator Project, GPL-2.0-or-later |
+
+## Folders
+
+| AnyPS5 path | Path in the imported tree | Files |
+|---|---|---|
+| `core/kyty/graphics/` | `src/graphics/` | every file |
+| `core/kyty/common/` | `src/common/` | every file except `CMakeLists.txt` |
+| `core/kyty/cmake/` | `src/` | `embed_spirv.cmake`, `embed_localization.cmake`, `cmake_config.h.in`, `kytyGitVersion.h.in` |
+| `core/libs/prx/libSceAgcDriver/KytyShim/include/kernel/` | `src/kernel/` | `eventQueue.h`, `fileSystem.h`, `guestPause.h`, `memory.h`, `pthread.h` |
+| `core/libs/prx/libSceAgcDriver/KytyShim/include/libs/` | `src/libs/` | `agc.h`, `controller.h`, `errno.h`, `hmd2.h`, `ime.h`, `imeCommon.h`, `imeDialog.h`, `libs.h` |
+| `core/libs/prx/libSceAgcDriver/KytyShim/include/loader/` | `src/loader/` | `demonsSoulsPageFree.h`, `demonsSoulsTitle.h`, `guestOodle.h`, `systemContent.h`, `timer.h` |
+
+Outside those folders, code adapted from the Kyty core is built only with `-DANYPS5_GPU_BACKEND=kyty`:
+
+| AnyPS5 path | Path in the imported tree | What |
+|---|---|---|
+| `core/libs/prx/libSceAgc/Kyty/` | `src/libs/agc.cpp` | `AgcGetFusedShaderSize`, `AgcFuseShaderHalves_0200`, `AgcFuseShaderHalves`, `AgcCreatePrimState`, `AgcUpdatePrimState`, `AgcGetGsOversubscription`, `AgcCreateInterpolantMapping`, `AgcCreateInterpolantMapping2`, `AgcGetRegisterDefaults2`, `AgcGetRegisterDefaults2Internal`, as AnyPS5's `sceAgc…` exports of the same NIDs; a missing register throws instead of dereferencing null |
+
+The headers under `KytyShim/include/` are the contract of the shim: they are the declarations of the KytyPS5 kernel,
+library and loader functions that `graphics/` and `common/` call, and the shim implements them on top of AnyPS5.
+`libs/dialog.h` is left out: only `graphics/presentation/systemOverlay.cpp`, which `kyty_gpu` does not build, includes
+it, and its `ErrorDialogOpen` and `ErrorDialogClose` would be second declarations of AnyPS5 exports for
+`core/libs/tests/test_public_headers.py`, which reads every header under `core/` without namespaces.
+
+## Changes from the import
+
+- Every comment is removed, except the two notices above. `core/kyty/tools/kyty_import.py` does it with a C++ lexer
+  that keeps string, character and raw string literals and digit separators intact, and checks each file: the token
+  stream that `g++ -fpreprocessed` produces is the same before and after, preprocessor line ends included.
+- Fixes made in [KytyPS5](https://github.com/KytyPS5/KytyPS5) after the imported revision, merged on its `main` or open as pull
+  requests, are applied on top of it, stripped of comments the same way, one commit each with a
+  `Ported-from: KytyPS5 <commit>` line per upstream commit:
+
+  | KytyPS5 commit | Pull request | Change |
+  |---|---|---|
+  | `174ec912` | — | `V_MSAD_U8` is translated |
+  | `2f26870e` | — | the device enables `VK_KHR_compute_shader_derivatives`, whose capabilities the translator emits |
+  | `a2ea94e9` | — | no swapchain is created while the window's surface has no area |
+  | `50c0c066`, `18809cb0`, `15c8c618` | — | the VideoOut output transfer applies to linear formats, unpremultiplied PQ overlays are clamped, the HDR attribute check is part of the `ATTRIBUTE` default; `50c0c066` adapted to the imported revision |
+  | `2086171a` | — | `pm4Handlers.cpp` only: a flip block on an async compute queue (`R = 0`) is recognised |
+  | `85e775f0` | #2062 | `RenderContext` builds the image heap before the pipeline cache |
+  | `8d2e4376` | #2245 | `LOAD_*_REG_INDEX` honour their `data_format` field |
+  | `bd2cffb2` | #2363 | write-only R16G16 signed storage images go through their unsigned view |
+  | `3e2e67c9`, `44016a0a` | #2006 | block-compressed textures get no DCC metadata, in `DeriveTextureDesc` |
+  | `d8fcae8e` | #1963 | `BASE_ARRAY` is ignored for 1D and 2D non-array views |
+  | `bc553dca` | #1733 | depth-compare samples get a sampler variant of their own |
+  | `222d8301` | #1405 | a lone last dword of a command buffer is consumed |
+  | `7ee598b4`, `f26b1d7e` | #1403 | a compute dispatch's scalar reads may overlap the start of its own sentinel write range (`FindBuffers`); `a9d34f70`'s `CommitBindings` check is not in the imported revision |
+  | `d6ad3c2b` | #1802 | a buffer allocation refused by VMA's budget is retried once without the budget limit |
+
+  `Presenter::PrepareFrame` takes the VideoOut pixel format since `50c0c066`: the shim passes the display buffer's
+  `pixelFormat`.
+- Nothing else is changed in the imported files. Adaptations to AnyPS5 go in the shim, or under
+  `#if defined(ANYPS5_KYTY)` in `core/kyty/`. `ANYPS5_KYTY=1` is defined for every target of a
+  `-DANYPS5_GPU_BACKEND=kyty` build and never otherwise.
+- `graphics/` calls four functions of SDL3 (`SDL_LoadObject`, `SDL_LoadFunction`, `SDL_UnloadObject` to open the
+  DLSS and FSR libraries when the user supplies them, `SDL_GetBasePath` to find shipped pipeline manifests). AnyPS5 has
+  SDL2, so `core/libs/prx/libSceAgcDriver/KytyShim/compat/SDL3/` gives `kyty_gpu` these four over `dlopen` and
+  `/proc/self/exe`; nothing else of SDL3 is declared there.
+- `pipelineManifest.cpp` calls `stbi_zlib_decode_buffer`, whose implementation upstream compiles in
+  `src/libs/libJpegDec.cpp`, which is not imported; AnyPS5 compiles `stb_image` as `static` in its own decoders, so
+  `kyty_gpu` compiles one `STB_IMAGE_IMPLEMENTATION` unit of its own (generated `stb_image.c`).
+
+## Build
+
+The Kyty core builds with Clang only (GCC rejects its Vulkan-Hpp aggregate assignments and `__builtin_memcpy_inline`).
+`core/kyty/CMakeLists.txt` is therefore a project of its own, which `core/kyty/cmake/KytyBackend.cmake` builds with
+`clang` and `clang++` as the external project `kyty_gpu` when `-DANYPS5_GPU_BACKEND=kyty` is set; the rest of AnyPS5 stays
+on GCC. Clang is given `--gcc-install-dir` of the GCC that builds AnyPS5, so both sides use the same libstdc++ headers.
+The sub-build uses upstream's compiler options (`-march=x86-64-v3 -ffp-contract=off -fno-rtti -fno-exceptions -g`,
+`-fexceptions` for `common/`, `descriptors.cpp` and `pipelineCache.cpp`), Tracy on demand, and its own SPIRV-Tools and
+glslang (with the optimizer, for `glslangValidator -Os` on upstream's utility shaders). `Kyty::gpu` is the interface
+target that links the resulting archives into AnyPS5. `core/kyty/KytyGpuSources.cmake` lists the imported sources left
+out of `kyty_gpu`, and `core/kyty/tools/kyty_frontier.py` lists the symbols `kyty_gpu` still needs from the shim.
+`kyty_gpu` is compiled with the profile of `core/kyty/pgo/` by default ([profile-guided optimization](KYTY_PGO.md)).
+
+### Windows
+
+On Windows AnyPS5 is built with MinGW-w64 GCC and `kyty_gpu` with the `clang` and `clang++` of an LLVM release found on
+`PATH`, for the `x86_64-w64-windows-gnu` target, with `--sysroot` set to the MinGW-w64 installation of that GCC
+(`ANYPS5_KYTY_SYSROOT`). Three options make its objects link with GCC's: `-femulated-tls` (GCC's thread-local storage
+model on MinGW, which libstdc++ uses), `-fno-zero-initialized-in-bss` (GCC puts every inline variable in a `.data$`
+section, and GNU ld only merges sections of one name) and `-mno-red-zone`. The shim is compiled with
+`-fno-extern-tls-init`, and `MemoryTracker::s_deferred` is declared without `inline` for GCC there, because GCC on
+MinGW emits the initialisation function of an inline `thread_local` variable once per translation unit. ThinLTO is off:
+lld cannot pre-link COFF objects with `-r`. `pipelineHelpers.cpp` is compiled with `-fexceptions`, as its Windows part
+uses `try`.
+
+The second view of guest memory (`DirectMemoryEnableView`) is a reserved range. Anonymous guest memory in the arena is
+mapped from pagefile-backed sections of 1 GiB, each created and mapped into the view when memory is first committed in
+its range, and each direct memory backing is mapped at its physical offset after the guest range. A section page cannot
+be given back to the system, so a page that held data is zeroed when it is unmapped and stays committed. Access
+violations reach `KytyShim::HandleHostFault` from libc's vectored exception handler through
+`GuestArenaSetGpuFaultHandler`. KytyPS5's pipeline helper processes are not used (`PipelineHelperProcesses` returns 0):
+a helper is the executable started again with `--pipeline-helper`, and here the executable is the converted title.
+
+## Third-party code
+
+The dependencies of `graphics/` and `common/` that AnyPS5 did not have are submodules at the revisions the imported
+tree pinned:
+
+| Submodule | Revision | Licence |
+|---|---|---|
+| `3rdparty/fmt` | `11ddbcb7898d2d3445d431a54814367b21dee6ad` | MIT-style ({fmt} licence) |
+| `3rdparty/xxHash` | `e573d4d2aaeaba0f3e5a0a9a54144a1f2b4b56e7` | BSD-2-Clause |
+| `3rdparty/magic_enum` | `1384769c66bd16ec9bb1353f45fe8ec8ccc12dbd` (v0.9.8) | MIT |
+| `3rdparty/xbyak` | `44a72f369268f7d552650891b296693e91db86bb` | BSD-3-Clause |
+| `3rdparty/zydis` | `120e0e705f8e3b507dc49377ac2879979f0d545c` (with `dependencies/zycore`) | MIT |
+
+`3rdparty/ffx-api` holds the four AMD FidelityFX API headers the imported tree vendored in `3rdparty/ffx-api`
+(FidelityFX-SDK v2.4.0, `Kits/FidelityFX`, unmodified, MIT licence in `3rdparty/ffx-api/LICENSE.txt`); `fsr.cpp` only
+declares the API with them and loads AMD's libraries at run time.
+
+`zydis` is used by the KytyPS5 loader (`x64InstructionEmulator.cpp`, `guestInstructionPatcher.cpp`), not by
+`graphics/` or `common/`: `kyty_gpu` does not build it. Vulkan-Headers, VulkanMemoryAllocator, SPIRV-Headers,
+SPIRV-Tools, glslang, tracy, stb, zstd and ZArchive are AnyPS5's own submodules, built a second time by the Clang
+sub-build.
+
+## Import tool
+
+`core/kyty/tools/kyty_import.py` is historical: it made the first import of the folders above from a Kyty source tree,
+without comments, and reported any file whose tokens changed. `core/kyty` is maintained in this repository; fixes taken
+from [KytyPS5](https://github.com/KytyPS5/KytyPS5) carry a `Ported-from: KytyPS5 <commit>` line.
+
+## Settings of the kyty build
+
+A build with `-DANYPS5_GPU_BACKEND=kyty` reads its settings from environment variables, once per process. The tables below list every `KYTY_*` name the code under `core/` reads, one row each, and `tools/check_kyty_settings.py` fails when a name read in `core/` has no row here or a row names something the code no longer reads. Three kinds of reader exist:
+
+- `KytyShim::StartRuntime()` (`core/libs/prx/libSceAgcDriver/KytyShim/src/Config.cpp`) loads KytyPS5's `ConfigOptions` at their defaults, then reads the variables named after KytyPS5's command-line options. An empty value counts as unset; an invalid value stops the emulator with a message naming the variable. Rows of this kind say "stops" in their values.
+- Code of `core/kyty/`, imported or ours, reads `KYTY_*` names with `std::getenv` or with a small helper that takes the name as a string literal. Each is read once; most accept anything and fall back to the default, as their values column says.
+- `common/emulatorConfig.cpp` reads the thread and pipeline variables itself.
+
+A name built at run time from pieces is not supported, because nothing can find it: pass the whole name as a literal.
+
+How to read the columns:
+
+- **Default** is what the code does with the variable unset, in this build; where it differs from the imported Kyty core the effect says so.
+- **Category**: `perf` is a performance switch (the default says whether it is on), `compat` fixes or works around wrong output, `option` is a plain user option, `debug` is for debugging and measurement, `experimental` is unfinished, unproven or known to hurt, `inert` has no effect in this build because the code that reads it is not built or never runs.
+- **Platform** is `all` unless a part of the effect exists on one system only; `—` for `inert`.
+- **Origin** is `Kyty import` for what the import of the Kyty core brought with its name, `Kyty option` for a field of KytyPS5's `ConfigOptions` that `8a29429250` made readable from the environment, and an AnyKyty commit for what this fork added or changed.
+
+### Window, display and upscaling
+
+AnyPS5 opens the window, so Kyty's window options do nothing; `ANYPS5_FULLSCREEN`, `ANYPS5_DISPLAY_INDEX` and the others in [the AnyPS5 settings below](#anyps5-settings-that-an-anykyty-session-also-reads) apply. This build does not read KytyPS5's `KYTY_FULLSCREEN`, `KYTY_HIDE_CURSOR`, `KYTY_VR`, `KYTY_RENDERDOC`, `KYTY_SCREEN_WIDTH`, `KYTY_SCREEN_HEIGHT`, `KYTY_CONSOLE_LANGUAGE`, `KYTY_TROPHY_NOTIFICATIONS` or `KYTY_TROPHY_DURATION`: the code they drive is not built, and the initial window size gives way to AnyPS5's window before any swapchain exists, so setting one changes nothing.
+
+| Variable | Values | Default | Effect | Category | Platform | Origin |
+|---|---|---|---|---|---|---|
+| `KYTY_BORDERLESS` | any value | unset | Borderless window flag, set in `window.cpp`, which is not built | inert | — | KytyPS5 |
+| `KYTY_OPENXR` | `0` | unset | Skips OpenXR start-up; read in `openxrHeadset.cpp`, which is not built | inert | — | KytyPS5 |
+| `KYTY_HDR` | `0` or `1`, else stops | `0` | Asks for an HDR10 swapchain format; without one the log says `HDR10 surface unavailable; using SDR output` | option | all | Kyty option |
+| `KYTY_STRETCH` | `0` or `1`, else stops | `0` | Fills the whole window with the game's image instead of fitting its aspect ratio | option | all | Kyty option |
+| `KYTY_PRESENT_MODE` | `Fifo`, `Mailbox`, `Immediate`, any case, else stops | `Mailbox` | Vulkan present mode of the swapchain; `ANYPS5_PRESENT_MODE` is not read with this backend | option | all | Kyty option |
+| `KYTY_GPU` | whole number, else stops | `-1` | Index of the Vulkan physical device; `-1`, or an index with no device (the log says so), lets Kyty choose; `ANYPS5_GPU` is not read with this backend | option | all | Kyty option |
+| `KYTY_VBLANK_FREQUENCY` | whole number, clamped to 30 to 360, else stops | unset | Vblank rate when `ANYPS5_VBLANK_HZ` is unset or empty; it also becomes Kyty's own vblank frequency. Unset keeps the output's 59.94 Hz and 119.88 Hz | option | all | Kyty option; `bffccd0fbf` |
+| `KYTY_PSSR_UPSCALER` | `Linear`, `DLSS`, `FSR`, any case, else stops | `Linear` | Upscaler of the PSSR path; `DLSS` and `FSR` load the vendor's library from the folder below through `SDL_LoadObject` | option | all | Kyty option |
+| `KYTY_TRINITY` | `0` or `1`, else stops | `0` | Kyty's PS5 Pro mode (`pro_enabled`), which only the DLSS and FSR upscalers read | option | all | Kyty option |
+| `KYTY_DLSS_FOLDER` | path | empty | Folder that holds the DLSS library | option | all | Kyty option |
+| `KYTY_FSR_FOLDER` | path | empty | Folder that holds the FSR library | option | all | Kyty option |
+| `KYTY_DLSS_PRESET` | `A` to `O`, else stops | unset | DLSS preset letter, 1 to 15 inside Kyty; unset keeps its 0 | option | all | Kyty option |
+
+### GPU threads and queues
+
+| Variable | Values | Default | Effect | Category | Platform | Origin |
+|---|---|---|---|---|---|---|
+| `KYTY_GPU_PIPELINE` | a number (base 0), else stops: `0` runs the whole GPU inline on one thread, `1` means every stage, other values keep the bits `1` recording, `2` command processor, `4` resolve | every stage (`7`) | Which stages of the emulated GPU run on threads of their own | perf | all | Kyty import |
+| `KYTY_GPU_THREAD_CPUS` | unset, empty, `off`, or up to six logical CPUs separated by commas: command processor, execution, recording, resolve, host copy, resolve helper; else stops | unset | Unset or empty: on Linux each stage keeps to the CPUs of the largest last-level cache, on Windows KytyPS5's `{4, 6, 8, 10, 2, 0}`. `off`: no placement. A list pins the stages; stages past its end keep KytyPS5's value. See [below](#details) | perf | all | Kyty import; Linux default `c06a623c12` |
+| `KYTY_GPU_THREAD_PRIORITY` | `0` | unset | `0` keeps the stage threads at their normal priority; otherwise they are raised, which only happens on Windows (`RaiseCurrentPriority` does nothing on Linux) | perf | Windows | Kyty import |
+| `KYTY_GPU_SPIN_US` | microseconds; text that is not a number reads as `0` | `2000` | How long a pipeline thread spins on an empty or full handoff before it waits in the kernel; `0` never spins | perf | all | Kyty import |
+| `KYTY_FAST_TLS` | `1`; any other text reads as unset | unset | `1` serves the emulated TLS of `libSceAgcDriver.prx`'s own `thread_local` variables from one native TLS slot instead of libgcc's `__emutls_get_address`, whose `pthread_getspecific` takes a spin lock on every access; variables of other modules keep libgcc's | perf | Windows | AnyKyty |
+| `KYTY_RESOLVE_HELPER` | `1` | unset | A second thread resolves some draws ahead of their execution beside the resolve thread; it takes the sixth entry of `KYTY_GPU_THREAD_CPUS` | perf | all | Kyty import |
+| `KYTY_SCOUT` | `0` to `3`, any other text reads as `3` | `3` | Look-ahead on queue 0: `0` off, `1` uses the scout thread's tickets, `2` its verifier, `3` the resolve thread evaluates each draw's tables ahead | perf | all | Kyty import |
+| `KYTY_FLUSH_DRAWS` | whole number, else stops | `0` | Submits the open command buffer every this many draws; `0` never does it on a count | perf | all | Kyty option |
+| `KYTY_IDLE_SUBMIT` | `0` or `1`, empty counts as unset, else stops | on | After a draw or a dispatch, submits the open command buffer when every closed one has been submitted and the GPU has finished them; `0` keeps a command buffer open until the end of the guest submission. See [below](#details) | perf | all | `820414454e` |
+| `KYTY_CP_ORDERED_READBACK` | `0` turns it off, any other value or unset leaves it on | on | A command processor read that faults on a page the GPU may own waits only for the operations that read is ordered after, instead of the whole GPU queue, and indirect register tables whose bytes the GPU never wrote are read without a fault; `0` drains the queue as before | perf | all | AnyKyty |
+| `KYTY_REPLAY_GPU_PAGE_READS` | On Linux `0` turns it off and any other value or unset leaves it on; on Windows only `1` turns it on | on (Linux), off (Windows) | A guest read that faults on a GPU-owned page, on bytes no GPU write is near, is replayed on the backing view instead of waiting for a readback; instructions that write memory or read the shifted register are never replayed; `0` waits for the readback as before; on Windows the replay ends on the single step exception of the vectored handler, and stays off by default until it is measured there | perf | all | AnyKyty |
+| `KYTY_REPLAY_AFTER_READBACK` | On Linux `0` turns it off and any other value or unset leaves it on; on Windows only `1` turns it on | on (Linux), off (Windows) | A guest read that faults on bytes the GPU wrote no longer waits for the execution thread to release the page after the copy; the copied bytes are read by replaying the instruction on the backing view, and the release is posted without waiting; an instruction the replay cannot serve waits for the release as before; `0` always waits for the release; on Windows it stays off by default until it is measured there | perf | all | AnyKyty |
+| `KYTY_HOT_PAGE_WRITE_WATCH` | `1` turns it on, any other value or unset leaves it off | off | Linux: a watched page the guest writes twice within a second stops faulting; it stays writable under asynchronous userfaultfd write protection, and its writes are collected with `PAGEMAP_SCAN` when a submission starts, when a memory wait or semaphore passes, before a CPU flip, and before the GPU writes a range that holds it; a page idle for 4 s, or whose mapping changes, goes back to `mprotect`; `[kyty-hot-pages]` sums it up every 10 s; off by default because the collections cost more than the faults they remove in a city scene, where memory waits pass thousands of times a second | perf | Linux | AnyKyty |
+| `KYTY_SUSPEND_POINT_DEPTH` | 1 to 64, else stops | `8` | Suspend points the GPU may have in flight; `1` is KytyPS5's behaviour. See [below](#details) | perf | all | `b370e0778c` |
+| `KYTY_PROGRAM_LOCK` | `narrow` or `wide`, else stops | `narrow` | Scope of the program-cache lock; `wide` is upstream's scope and endless spin. See [below](#details) | perf | all | `6d40e04a28` |
+| `KYTY_LOCK_STATS` | `0` or `1`, else stops | `0` | Every period, `[lock-stats]` lines on stderr: wait and hold times of the lock per thread and per acquisition site, and the guest reads of `GetProgram` inside and outside the lock | debug | all | `6d40e04a28` |
+| `KYTY_LOCK_STATS_PERIOD` | whole seconds, 1 to 3600, else stops | `5` | Seconds between two `[lock-stats]` reports | debug | all | `6d40e04a28` |
+
+### Draws, tables, native records and shaders
+
+The table draws are GPU-driven draws of a shader pair's table programs; the native XPR records are their older fallback, off by default. The sub-switches of the records matter only with `KYTY_NATIVE_XPR=1`, except where the effect says otherwise.
+
+| Variable | Values | Default | Effect | Category | Platform | Origin |
+|---|---|---|---|---|---|---|
+| `KYTY_DRAW_TEMPLATES` | `0`, `1`, `2`; other text reads as `1` | `2` (KytyPS5: off) | Draw templates: `1` turns them on, `2` also keys them by the draw's registers and takes the pipeline and render targets from them | perf | all | Kyty import; on by default `50d7c13842` |
+| `KYTY_DRAW_BUFFERS` | `1`; other text is off | on (KytyPS5: off) | Copies the small read-only buffer ranges of a draw to the stream buffer together before its stages bind them | perf | all | Kyty import; on by default `50d7c13842` |
+| `KYTY_TABLE_XPR` | `0`, `1`, `2` (read in base 0) | `2` | Table draws: `0` off, `1` on, `2` also continues runs of clean draws, which the command processor's `DrawStateObserver` finds | perf | all | Kyty import |
+| `KYTY_TABLE_DISPATCH` | `0`, `1` | `0`; `1` for Demon's Souls (`PPSA01340` to `PPSA01342`) | Dispatches of a shader pair that learned its table program go through the table | perf | all | Kyty import |
+| `KYTY_TABLE_INDIRECT` | number | `1` | Read and never used: the indirect-table code is compiled out (`KYTY_CX_INDIRECT` is 0) | inert | — | Kyty import |
+| `KYTY_TABLE_STORE_BUDGET` | number; `0` no limit | `32` | Table stores a frame asks for; the others are deferred to the normal path | perf | all | Kyty import |
+| `KYTY_TABLE_SET_PROOFS` | `0`, `1`, `2` | `1` | Checks of a table's image sets: `0` checks every use in full, `1` skips a use whose proof still holds, `2` does and counts the uses a proof held for that did not pass | perf | all | Kyty import |
+| `KYTY_TABLE_MRU` | bit mask | `7` | Bit `1` a larger pair cache, `2` variant hints, `4` reuse of the previous draw's set when its words match | perf | all | Kyty import |
+| `KYTY_TABLE_TARGET_READ` | number | `0` | A render target the shaders sample is held with the shader access added, as the normal path transits it | experimental | all | Kyty import |
+| `KYTY_TABLE_GATHER_MEMO` | number | `1` | Memoises the buffer descriptors a table gathers | perf | all | Kyty import |
+| `KYTY_TABLE_MEMO` | number | `1` | Remembers by shader pair and state key what a table draw drew with last | perf | all | Kyty import |
+| `KYTY_TABLE_MEMO_VERIFY` | number | `0` | Every Nth memo hit is checked against the full path, and a difference is counted | debug | all | Kyty import |
+| `KYTY_TABLE_SERIALS` | `0`, `1`, `2` | `0` | Decides the target and set checks by sums of image serials: `1` skips a check when the sums did not move, `2` runs the checks and reports those the sums would have skipped | experimental | all | Kyty import |
+| `KYTY_TABLE_STRIDES` | first character `0` is off | on | Table programs read an unswizzled buffer of any stride from the block, where otherwise they specialise on the stride | perf | all | Kyty import |
+| `KYTY_DRAW_READ_AFTER_WRITE` | number | `1` | A draw whose image set binds one image as texture and as written storage transits it at every draw, after the last draw's write | compat | all | Kyty import |
+| `KYTY_STATE_KEY_CACHE` | first character `0` is off | on | Hashes the draw-state registers again only for another snapshot of them; also used by table draws | perf | all | Kyty import |
+| `KYTY_ASYNC_XPR_PIPELINES` | first character `0` is off | on | Creates the pipeline of a record or table variant on a background thread; `0` does it on the execution thread; also used by table draws | perf | all | Kyty import |
+| `KYTY_NATIVE_XPR` | first character `1` is on | off | Native XPR records: an indexed indirect draw is replayed from a record of its object. Off because upstream saw Demon's Souls' walls drawn dark and another title slower with it | experimental | all | Kyty import |
+| `KYTY_NATIVE_XPR_RELOCATE` | first character `0` is off | on | Relocated records, which rebind buffers whose bases moved | experimental | all | Kyty import |
+| `KYTY_NATIVE_XPR_INSTANCES` | first character `1` is on | off | One relocated record per instance of a mesh; upstream's Demon's Souls crashed in the driver with it | experimental | all | Kyty import |
+| `KYTY_NATIVE_XPR_DIRECT` | first character `0` is off | on | Direct indexed draws use records; `0` sends them to the normal path | experimental | all | Kyty import |
+| `KYTY_NATIVE_XPR_VB` | first character `0` is off | on | Draws with vertex buffers are stored as records; `0` does not store them | experimental | all | Kyty import |
+| `KYTY_NATIVE_IMAGE_PROOF` | first character `0` is off | on | A record's sampled images are checked again only when their own registration changed; `0` checks them whenever any image was registered or unregistered | experimental | all | Kyty import |
+| `KYTY_NATIVE_XPR_STORE_BUDGET` | number; `0` no limit | `256` | Record stores asked for a frame | experimental | all | Kyty import |
+| `KYTY_NATIVE_XPR_KEEP_FRAMES` | number, at least `2` | `600` | Frames an unused record stays | experimental | all | Kyty import |
+| `KYTY_NATIVE_XPR_PREDICT` | first character `0` is off | on | Prefetches the record the next draw used last time | experimental | all | Kyty import |
+| `KYTY_NATIVE_XPR_STATS` | first character `1` is on | off | Prints record counters every 300 frames | debug | all | Kyty import |
+| `KYTY_XPR_RESOLVE_SKIP` | first character `0` is off | on | Skips the resolution ahead of a draw whose pair the last native try drew; `0` resolves them all | experimental | all | Kyty import |
+| `KYTY_BDA_REGIONS` | number, `0` off | `1` for Demon's Souls, else `0` | Synchronises device-address buffers by region requests with epoch proofs instead of a pass over every mapped range | perf | all | Kyty import |
+| `KYTY_BDA_DIRTY_REGIONS` | number, `0` off | `1` | With `KYTY_BDA_REGIONS`, a bounded preparation visits only the regions whose dirty bit is set | perf | all | Kyty import |
+| `KYTY_UNIFORM_BUFFERS` | first character `0` is off | on | Shaders read constants at small immediate offsets through uniform buffer views (needs `uniformBufferStandardLayout`); `0` reads them through the storage buffer | perf | all | Kyty import |
+| `KYTY_NATIVE_F16` | first character `0` is off | on | Shaders compute F16 natively (needs `shaderFloat16`); `0` does it per lane in F32 | perf | all | Kyty import |
+| `KYTY_TESSELLATION` | `0` or `1`, else stops | `1` | Draws patch primitives with tessellation; `0` drops them before their programs are looked up or prepared | option | all | Kyty option |
+| `KYTY_OCCLUSION_QUERIES` | `0` or `1`, else stops | `1` | Host occlusion queries, which need the device's `hostQueryReset`; `0` turns them off | option | all | Kyty option |
+| `KYTY_RELAXED_SHADER_FLOAT` | `0` or `1`, else stops | `0` | Relaxes the shader recompiler's float rules (min and max, trigonometric functions) for speed | experimental | all | Kyty option |
+| `KYTY_WAVE_SPLIT` | `0` or `1`, else stops | `0` | On GPUs without wave64 compute, runs a one-wave wave64 compute shader as two 32-wide subgroups that exchange cross-lane values through workgroup memory; `0` emits it in lane pairs (every instruction twice), which builds slower | perf | all | Kyty option |
+| `KYTY_IMAGE_TABLE_HEAP` | `0` or `1`, else stops | `1` | Serves a sampled-float bindless texture table (an array of 32-byte image descriptors in memory) through the image heap, which mirrors the table memory, so the shader and pipeline layout no longer depend on how many textures the table holds; `0` binds the table's textures as a per-draw descriptor array whose capacity is baked into the shader, which rebuilds the shader when the table grows past a power of two | perf | all | Kyty option |
+| `KYTY_FALLBACKS` | `0` or `1`, else stops | `1` on Linux, `0` on Windows | Where the emulator would stop on something Kyty does not handle and a safe way on exists, it takes it and logs one `[HACK]` line per source (see [Details](#details)); `0` stops as before | compat | all | AnyKyty |
+
+### Memory, readbacks, flips and labels
+
+| Variable | Values | Default | Effect | Category | Platform | Origin |
+|---|---|---|---|---|---|---|
+| `KYTY_READBACK_LINEAR_IMAGES` | `0` or `1`, else stops | `1` | Copies a GPU-written linear image back to guest memory at the next suspend point | compat | all | Kyty option |
+| `KYTY_READBACK_TILED_IMAGES` | `0` or `1`, else stops | `0` | The same for tiled images, which is slow | compat | all | Kyty option |
+| `KYTY_READBACK_STORAGE_IMAGES` | `0` or `1`, else stops | `0` | Copies every storage image back on its first write; see `KYTY_WRITE_BACK_IMAGES` | compat | all | Kyty option |
+| `KYTY_WRITE_BACK_IMAGES` | `0` or `1`, empty counts as unset, else stops | on | Copies the queued readbacks back at each `ACQUIRE_MEM` or `RELEASE_MEM` with GL2 write-back and at each flip; `0` is KytyPS5's behaviour. See [below](#details) | compat | all | `9d957fd81e` |
+| `KYTY_FLAT_TABLE_SLOTS` | `0` turns it off, any other value or unset leaves it on | on | A new image descriptor table finds repeated 32-byte descriptors through a flat index the execution thread reuses, instead of one `unordered_map` node per distinct descriptor; the slots, the mapping and their order are the same; `0` uses the `unordered_map` | perf | all | AnyKyty |
+| `KYTY_URGENT_WRITEBACK_WAIT` | `0` turns it off, any other value or unset leaves it on | on | A guest thread that faults on a page whose texture write-back is still in the open command buffer sends the flush on the urgent queue and waits for that submission itself, instead of queueing the flush behind every operation the command processor has queued; `0` sends it through the ordinary command queue | perf | all | AnyKyty |
+| `KYTY_FIX_STENCIL_FILL_HELD_PLANE` | `0` turns it off, any other value or unset leaves it on | on | A buffer fill of a stencil plane becomes a clear of the depth image's stencil aspect only while that aspect holds the plane; a fill of another plane runs as the game's own fill, so it no longer wipes the plane the depth image holds; `0` clears the aspect for a fill of any registered plane | compat | all | AnyKyty |
+| `KYTY_TILE_VIA_VRAM` | `0` or `1`, empty counts as unset, else stops | on | Tiles a tiled image's readback in device-local memory, then copies it once to the host; `0` is KytyPS5's behaviour. See [below](#details) | perf | all | `08c666a175` |
+| `KYTY_COMPARE_WRITE_BACK` | `0` or `1`, empty counts as unset, else stops | on | An image readback writes guest memory only where the GPU result differs from the bytes read when the readback was recorded and the guest bytes still hold that read; `0` writes the image's whole footprint, KytyPS5's behaviour. See [below](#details) | compat | all | AnyKyty |
+| `KYTY_SYNC_RAW_IMAGE_BUFFERS` | `0` or `1`, else stops | `0` | Obtains a raw buffer that a shader reads the way a formatted (texel) buffer is obtained | compat | all | Kyty option |
+| `KYTY_SRT_WALKER_PROBE` | `0` or `1`, empty counts as unset, else stops | on | The shader resource table walk of the execution thread reads a page the GPU may own through the fault handler's around-GPU-writes read, without taking the fault; `0` takes the fault. See [below](#details) | perf | all | `8095894f76` |
+| `KYTY_COPY_FEEDBACK` | `0` is off | on | After a small GPU copy into guest memory, snapshots the destination so that a later guest read is served from the snapshot instead of a readback | perf | all | Kyty import |
+| `KYTY_ASYNC_REPROTECT` | `0` is off | on | The write protection of the pages an upload marks clean is applied by the host copy thread, ahead of the copy | perf | all | Kyty import |
+| `KYTY_ASYNC_IMAGE_STAGING` | `0` or `1`; empty counts as unset | on for Demon's Souls, else off | The staging copies of image uploads run on the host copy thread | perf | all | Kyty import |
+| `KYTY_ENGINE_FREE_BUFFERS` | `0` off, `2` drops GPU-written bytes, else on | on | Buffers over a block the game freed and kept mapped go as for an unmap. Its only entry, `NoteGameFree`, has no caller in this build: it belongs to Demon's Souls' page-free hook, which is not imported | inert | — | Kyty import |
+| `KYTY_EARLY_FLIP` | `0` or `1`, empty counts as unset, else stops | on | Completes a guest flip once its command buffer is submitted, on a thread of its own; `0` is KytyPS5's behaviour. See [below](#details) | perf | all | `499dfc3f39` |
+| `KYTY_LABELS_AFTER_DUMPS` | `0` or `1`, empty counts as unset, else stops | on | A deferred `RELEASE_MEM` label waits for the newest pending occlusion dump instead of its own command buffer; `0` is KytyPS5's behaviour. See [below](#details) | perf | all | `ef88cc3285` |
+| `KYTY_LABELS_AROUND_GPU_WRITES` | `0` or `1`, empty counts as unset, else stops | on | A `RELEASE_MEM` label that arrives while other labels are deferred, on a page the GPU wrote elsewhere but none of whose own bytes it wrote, is deferred behind them instead of draining the GPU; `0` drains. See [below](#details) | perf | all | AnyKyty |
+
+### Pipelines and shader store
+
+This build does not read KytyPS5's `KYTY_PIPELINE_PRECOMPILE`: stopping the game while the manifest's pipelines compile needs the helper processes and `GuestPause::Supported()`, and this build has neither, so the game never stops for them.
+
+| Variable | Values | Default | Effect | Category | Platform | Origin |
+|---|---|---|---|---|---|---|
+| `KYTY_ASYNC_PIPELINES` | `0`, `1` or `2`, else stops | `1` | `1`: for a draw that only changes the picture, and is not a small colour target, the pipeline is created on a background thread and the draw is skipped until it is ready, after waiting 20 ms for it. `2`: when every target of the draw was drawn in one of the two frames before, the draw is also skipped if it goes to a small colour target, is counted by an occlusion query (the query then reads visible), has a small pipeline or has no depth and small vertex programs, and a new pipeline is not waited for: it is taken from the driver cache or linked from ready stage libraries at once, else the draw is skipped until the background thread has built it; a draw into a target that was not drawn just before is handled as with `1`. With both, draws whose programs write memory or whose targets are linear, and dispatches, wait. `0` always waits | perf | all | Kyty option |
+| `KYTY_PIPELINE_LIBRARIES` | `0` is off | on | Links graphics pipelines from per-stage pipeline libraries (`VK_EXT_graphics_pipeline_library`) | perf | all | `76827a9140` |
+| `KYTY_PIPELINE_LIBRARIES_AHEAD` | `0` is off | on | Prepares the stage libraries a draw will need ahead of it, while libraries were used in the last 5 seconds | perf | all | `76827a9140` |
+| `KYTY_PIPELINE_CHAIN` | `0` is off | on | When the resolve thread meets a draw whose module is missing, worker threads off the V-Cache CCD translate the pixel shader, then the vertex shader, then build both stage libraries, instead of one at a time at the draw | perf | all | `51c397b379` |
+| `KYTY_PIPELINE_CHAIN_THREADS` | whole number, clamped to 1 to 16 | `4` | Threads of the pipeline chain above | perf | all | `51c397b379` |
+| `KYTY_PIPELINE_STALL_LOG_MS` | milliseconds; text that is not a number reads as `0`, which logs every one | `100` | Logs a `[kyty-gpl]` line for a pipeline stall or shader translation that takes at least this long. If explicitly set, also logs completed `vkCreateComputePipelines` calls at or above the same threshold, with elapsed time, shader hash, module ID, SPIR-V word count, lookup or create mode, and Vulkan result, and `[kyty-frames]` lines: presentation gaps over 250 ms, and every 10 s the counts of gaps over 50 ms, 250 ms and 1 s. A graphics or compute stall line ends with `why=`, the reason it was not skipped | debug | all | `76827a9140` |
+| `KYTY_PGO_DUMP_SECONDS` | seconds; `0` or unset is off | off | In an instrumented build (`-DKYTY_PGO_GENERATE=ON`), writes the profile counters every this many seconds, since a converted game does not run its exit handlers | debug | all | `a1b17740ba` |
+| `KYTY_PGO_WRITE_SECONDS` | whole number of seconds; `0` writes only at exit | `60` | In an instrumented `kyty_gpu.prx` (`-DANYPS5_KYTY_DLL=ON -DANYPS5_KYTY_DLL_PGO=GEN`), writes the profile counters to `kyty_gpu-<pid>-<seconds>s.profraw` every this many seconds, since a converted game does not run its exit handlers | debug | Windows | AnyKyty |
+| `KYTY_PGO_DIR` | directory | the build's `ANYPS5_KYTY_DLL_PGO_DIR` | In an instrumented `kyty_gpu.prx`, the directory the `.profraw` files go to | debug | Windows | AnyKyty |
+| `KYTY_PIPELINE_MANIFEST` | `0` or `1`, else stops | `1` | Warms the pipelines listed in the title's manifest (shipped with the assets, or recorded in an earlier session) at start | perf | all | Kyty option |
+| `KYTY_RECORD_PIPELINE_MANIFEST` | `0` or `1`, else stops | `0` | Records the pipelines of the session as a manifest even when the manifest is off; the shader store is not used while it records | debug | all | Kyty option |
+| `KYTY_STRICT_PIPELINE_MANIFEST` | `0` or `1`, else stops | `0` (the build's `KYTY_STRICT_PIPELINE_MANIFEST_DEFAULT`) | A pipeline of a shipped manifest that fails to build stops the emulator instead of being dropped | debug | all | Kyty option |
+| `KYTY_PIPELINE_HELPERS` | number | unset | Number of helper processes that compile pipelines. They are never started in this build: `PipelineHelperProcesses` returns 0 on Linux and when `ANYPS5_KYTY` is defined | inert | — | Kyty import |
+| `KYTY_SHADER_CACHE` | `0` or `1`, else stops | `1` (KytyPS5: `0`) | Keeps recompiled shaders in `_PipelineCache/<title id>.shaders` and warms them up at start; a Release build only, and not while `KYTY_GRAPHICS_DEBUG_DUMP` or the manifest recording is on. A second start loads them instead of translating the shaders again: on a 16-core Ryzen with an RTX 5080, one title loaded 900 modules and 314 pipelines in 534 ms where it had translated 610 modules in 2.4 to 3.0 s, with the same frame rate and the same images. The first start of a title gains nothing | perf | all | Kyty option; on by default in AnyKyty |
+| `KYTY_SHADER_CACHE_STAMP` | integer in base 0, else ignored | the stamp the build computes from the shader recompiler's sources | Replaces the stamp written in the shader store's header; `0` turns the store off | debug | all | `4749ffc567` |
+| `KYTY_SHADER_CACHE_THREADS` | whole number, `0` or text is ignored | `Common::ParallelThreads()`, at most the number of jobs | Threads that warm the shader store up | perf | all | `4749ffc567` |
+| `KYTY_SHADER_CACHE_SHARED` | `1` shared, any other value per-thread | shared, except per-thread with NVIDIA's driver | One shared Vulkan pipeline cache for the warm-up threads, or one cache per thread | perf | all | `4749ffc567` |
+| `KYTY_SHADER_VARIANT_LOG` | `1` enables it | off | Logs one `[kyty-variant] build` record per successful shader module build, including ahead and manifest compilation. Cache hits and stored-module restores produce no record. The module ID and separate static-state, buffer, image, sampler and linked-code fingerprints identify changing inputs without dumping shader code. The record includes the compiled push-data start and the requested cursor as separate values | debug | all | AnyKyty |
+
+### Ray tracing
+
+| Variable | Values | Default | Effect | Category | Platform | Origin |
+|---|---|---|---|---|---|---|
+| `KYTY_NATIVE_RT` | `0` or `1`, else stops | unset | Unset: native ray tracing when the device has `VK_KHR_acceleration_structure`, `VK_KHR_ray_query` and `VK_KHR_deferred_host_operations` with their features, emulated otherwise. `1`: native, and a stop when the device cannot. `0`: emulated. KytyPS5's own default is off | perf | all | Kyty option; on by default `8a29429250` |
+| `KYTY_RT_STATS` | `0` or `1`, else stops | `0` | With native ray tracing, shaders count their queries and an `[RT]` summary of the last 10 seconds is logged | debug | all | Kyty option |
+| `KYTY_RT_ORACLE` | `0` to `15`, else stops | `1` | With native ray tracing, bit 1: the BVH intersections of compute walks no form recognizes answer from a host ray query while the guest walk code runs as written; bit 2: the walks a form recognizes are served the same way instead of their rewrite; bit 4: no form is tried; bit 8, with bit 1: the walks of pixel shaders are served too, their draws then build the host TLAS before their rendering pass. Bit 8 is off by default: `KYTY_RT_CHECK` replays dispatches, not draws | perf | all | AnyKyty |
+| `KYTY_RT_CHECK` | dispatch period, `0` turns it off | `0` | With native ray tracing, one dispatch in N of every program served natively (`ShaderModule::guest_traversal` false, `bvh` and `ray_query`) is played twice: native variant, outputs saved and previous contents restored, then emulated variant, whose outputs stay; a compute pass counts the output dwords that differ and one `[RT] check` line per check is logged; one in 16 N once a program passed 4 checks. Programs that write through device addresses, GDS, self-sized buffers, indirect write tables or image tables are not replayed (one line says why). The emulated variant is translated by the background compile workers: a check waits until it is ready. Decisions go to `_PipelineCache/<title>.rt` and are reused while the check is on and the recompiler stamp, host stamp, effective oracle bits and PPM tolerance all match. A fallback holds for its session only | debug | compute | AnyKyty |
+| `KYTY_RT_CHECK_PPM` | 0 to 1000000 | `1000` | Fraction of differing output dwords, in parts per million, above which a check fails | debug | compute | AnyKyty |
+| `KYTY_RT_CHECK_STRIKES` | 1 to 1000 | `3` | Failed checks in a row after which the program uses its emulated variant for the rest of the session (one `[RT] check … falls back` line) | debug | compute | AnyKyty |
+| `KYTY_RT_ARENA_MB` | MiB, empty counts as unset | a quarter of the largest device-local heap, 512 MiB to 4 GiB | Limit of the memory the native BLASes take; `0` means no limit | perf | all | Kyty import |
+| `KYTY_RT_RESULTS` | `0` or `1`, else stops | `0` | With `KYTY_RT_ORACLE` on, bit 32 of the oracle setting: in the default mode too, a walk whose results the compiler derives by playing the walk on synthetic BVHs (`ir/passes/RayQueryResults.cpp`) is traced by one host ray query and its results are substituted after the loop, without running the guest walk code. `KYTY_RT_ORACLE=3` and `5` already do it | perf | compute | AnyKyty |
+
+### Logs, dumps, validation and profiling
+
+| Variable | Values | Default | Effect | Category | Platform | Origin |
+|---|---|---|---|---|---|---|
+| `KYTY_PRINTF_DIRECTION` | `Silent`, `Console`, `File`, any case, else stops | `Silent` | Where Kyty's log (`LOGF`) goes: nowhere, stderr beside AnyPS5's own lines, or `KYTY_PRINTF_OUTPUT_FILE` | debug | all | Kyty option |
+| `KYTY_PRINTF_OUTPUT_FILE` | path | `_kyty.txt` | File of the `File` direction | debug | all | Kyty option |
+| `KYTY_SESSION_LOG` | path | empty | Session log file, opened at start with a header | debug | all | Kyty option |
+| `KYTY_RELAUNCHED` | any value | unset | KytyPS5's launcher sets it when it starts the emulator again, and KytyPS5's `common/logging/log.cpp`, which is not built, then appends to the log files. The shim's log does not read it: its files are truncated at each start | inert | — | KytyPS5 |
+| `KYTY_SHADER_LOG_DIRECTION` | `Silent`, `Console`, `File`, any case, else stops | `Silent` | Anything but `Silent` makes the recompiler dump its IR; the shader dumps go under `KYTY_SHADER_LOG_FOLDER` | debug | all | Kyty option |
+| `KYTY_SHADER_LOG_FOLDER` | path | `_Shaders` | Folder of the shader dumps | debug | all | Kyty option |
+| `KYTY_COMMAND_BUFFER_DUMP` | `0` or `1`, else stops | `0` | Writes each command buffer the title submits to a file under `KYTY_COMMAND_BUFFER_DUMP_FOLDER`, named by frame and number | debug | all | Kyty option |
+| `KYTY_COMMAND_BUFFER_DUMP_FOLDER` | path | `_Buffers` | Folder of the command buffer dumps | debug | all | Kyty option |
+| `KYTY_GRAPHICS_DEBUG_DUMP` | `0` or `1`, else stops | `0` | Emits debug info in the shaders and turns the shader store off | debug | all | Kyty option |
+| `KYTY_PROFILE` | `0` or `1`, else stops | `0` | Starts the Tracy profiler, which listens on `127.0.0.1:8086` | debug | all | Kyty option |
+| `KYTY_VULKAN_VALIDATION` | `0` or `1`, else stops | `0` | Enables the Khronos validation layer | debug | all | Kyty option |
+| `KYTY_GPU_ASSISTED_VALIDATION` | `0` or `1`, else stops | `0` | GPU-assisted validation; it turns `KYTY_VULKAN_VALIDATION` on | debug | all | Kyty option |
+| `KYTY_SHADER_VALIDATION` | `0` or `1`, else stops | `0` | Runs the SPIRV-Tools validator on each recompiled module and logs what it finds | debug | all | Kyty option |
+| `KYTY_SPIRV_DEBUG_PRINTF` | `0` or `1`, else stops | `0` | Enables `debugPrintfEXT` in the generated shaders | debug | all | Kyty option |
+| `KYTY_CX_OBSERVER` | any value | unset | Counts what dirtied the registers between draws, by first cause | debug | all | Kyty import |
+| `KYTY_PERF_OVERLAY` | `0` or `1`, else stops | `0` | Switches Kyty's debug counters on; the overlay that draws them is not built, and `PerformanceOverlayEnabled()` is `false` in the shim | debug | all | Kyty option |
+
+### AnyPS5 settings that an AnyKyty session also reads
+
+The window, the flip and vblank pacing, the guest memory and the thread priority of the presenter are AnyPS5's, so their `ANYPS5_*` and `APS5_*` settings apply with the Kyty backend. Each has its row in [ENVIRONMENT](ENVIRONMENT.md); this table says what it does here. Settings read only by AnyPS5's own GPU driver (`core/libs/prx/libSceAgcDriver/Execution/`, which this build does not compile) have no effect: `ANYPS5_GPU` and `ANYPS5_PRESENT_MODE` are replaced by `KYTY_GPU` and `KYTY_PRESENT_MODE`.
+
+| Variable | Values | Default | Effect with the Kyty backend | Category | Platform | Origin |
+|---|---|---|---|---|---|---|
+| `ANYPS5_VBLANK_HZ` | whole number, 30 to 360, else stops | unset | Vblank rate; unset or empty takes `KYTY_VBLANK_FREQUENCY`, and the value also becomes Kyty's vblank frequency, so `ANYPS5_VBLANK_HZ=240` lifts the 60 FPS cap of titles that pace on vblank | option | all | `bffccd0fbf` |
+| `APS5_UNPACED_FLIPS` | `0`, `1` or empty, else stops | `0` | Benchmark aid: each flip completes once presented, not at the next vblank, so a title that renders faster than the vblank presents as fast as it can; set `KYTY_PRESENT_MODE=Immediate` or `Mailbox` too to present above the display's rate | debug | all | `b3691289ef` |
+| `ANYPS5_KYTY_PRESTART` | `0` or `1`, empty counts as unset, else stops | `1` | Starts the Kyty GPU on a host thread as soon as the video output is created; `0` starts it after the window exists | perf | all | `e465445589` |
+| `ANYPS5_KYTY_SPARSE_READS` | `0` or `1`, empty counts as unset, else stops | `1` | The Kyty GPU asks the memory files where the data of a 64 KiB or larger range is (`SEEK_DATA`) and writes zeros for the never-written parts without touching them; `0` reads every byte | perf | Linux | `21c1eae177` |
+| `APS5_NO_DIRECT_GUEST_COPY` | presence | unset | On Linux x86-64 the checked guest copies read with plain loads whose faults the signal handlers turn into a failed copy; set, every checked read is a `process_vm_readv` system call again | debug | Linux | `004c1c4ede` |
+| `ANYPS5_FULLSCREEN` | `0`, `1`, `windowed`, `borderless` | `windowed` | Opens the display window fullscreen at the desktop resolution; the window AnyKyty presents into is AnyPS5's, so this replaces `KYTY_FULLSCREEN` | option | all | AnyPS5 |
+| `ANYPS5_DISPLAY_INDEX` | index of a connected display, else stops | `0` | Display that the window opens on | option | all | AnyPS5 |
+| `ANYPS5_FPS_LIMIT` | 0.5 to 1000000 with at most three decimals, else stops | `0` (no limit) | Most frames per second the flips present | option | all | AnyPS5 |
+| `APS5_OUTPUT_RESOLUTION` | `<width>x<height>`, else the output status calls throw | unset: follows the display | Output resolution `sceVideoOutGetOutputStatus` reports to the title, 1080p class under 3840 by 2160 and 2160p class otherwise; it does not change the render size | option | all | AnyPS5 |
+| `ANYPS5_VIDEO_OUT_MAX_WIDTH`, `ANYPS5_VIDEO_OUT_MAX_HEIGHT` | positive integers, else output-mode queries throw | unset | Host display hint: set below 3840 (width) or 2160 (height), an output mode that AnyPS5 does not know is reported as unsupported, so that the title falls back to the host resolution | option | all | AnyPS5 |
+| `ANYPS5_UPSCALE` | `fsr`, `cmaa2`, `rcas`, unset or empty, else stops | unset | Scales the presentation with FSR 1 (EASU and RCAS) when the window is larger than the display buffer, applies Intel CMAA2 morphological anti-aliasing under `cmaa2` at 1:1, or 1:1 native RCAS under `rcas`; unset or empty keeps the bilinear blit | option | all | AnyPS5 |
+| `ANYPS5_FSR_SHARPNESS` | number, 0.0 to 2.0, else stops | `0.2` | RCAS sharpness in stops under `ANYPS5_UPSCALE=fsr` or `rcas`, from 0.0 (sharpest) to 2.0 (weakest) | option | all | AnyPS5 |
+| `APS5_SYNC_FLIP` | presence | unset | Debug aid: the flip worker waits until the presenter is done with each flip | debug | all | AnyPS5 |
+| `APS5_THREAD_PRIORITY` | `off`, `high`, `rt` | `off` | Raises the presenter thread above the title's threads; Kyty's own stage threads follow `KYTY_GPU_THREAD_PRIORITY` instead | perf | all | `a9c132a629` |
+| `APS5_THREAD_NICE`, `APS5_THREAD_RT`, `APS5_THREAD_RTTIME_US` | see [ENVIRONMENT](ENVIRONMENT.md) | see there | Tune that raised priority on Linux | perf | Linux | `a9c132a629` |
+
+### Details
+
+The settings below change how a part of the driver works, so each has its reasoning and measurements here; the tables above say what to set.
+
+KytyPS5's log (`LOGF`) is silent by default; `KYTY_PRINTF_DIRECTION=Console` sends it to stderr, beside AnyPS5's own lines.
+
+GPU stage threads on Linux: KytyPS5 places them only on Windows (`{4, 6, 8, 10, 2, 0}` counts SMT siblings as adjacent
+logical processors, and its core reservation uses Windows CPU sets). Under `ANYPS5_KYTY` on Linux, with
+`KYTY_GPU_THREAD_CPUS` unset or empty, each stage thread (command processor, execution, recording, resolve, host copy,
+resolve helper) keeps to the logical CPUs that share the largest last-level cache (`/sys/devices/system/cpu`: on a Ryzen
+9 7950X3D, CPUs 0-7 and 16-23, the 3D V-Cache CCD), intersected with its current affinity. No core is reserved, and the
+threads it creates afterwards inherit that set. Measured on Subnautica: +7 % to +22 % frames per second, 25-35 % less CPU
+time per draw on each stage (`notes/au-dela-p4-placement.md`). `KYTY_GPU_THREAD_CPUS=off` turns it off. An explicit list
+pins each stage to that Linux logical CPU, without core reservation; threads a stage creates afterwards inherit its CPU.
+
+Images the game reads after the GPU writes them: KytyPS5 copies a GPU-written linear image back to guest memory at the
+next suspend point, unless `KYTY_READBACK_STORAGE_IMAGES=1`. A game that waits for the label of a `RELEASE_MEM` with GL2
+write-back and then reads the image reads stale memory: in TCG Card Shop Simulator (PPSA36301) a 64×64 RGBA32F image is
+read that way and the street stays almost black. Under `ANYPS5_KYTY`, the write-back half of that setting is on by
+default: at each `ACQUIRE_MEM` or `RELEASE_MEM` with GL2 write-back and at each flip, the images already queued for
+readback are copied back, and their pages stay read-protected until the copy lands. No other image is copied: the copy
+of every storage image on its first write still needs `KYTY_READBACK_STORAGE_IMAGES=1`. `KYTY_WRITE_BACK_IMAGES=0`
+restores KytyPS5's behaviour; any value other than empty, `0` or `1` stops the emulator with a message naming the
+variable.
+
+Readback of tiled images: KytyPS5 copies a GPU-written tiled image back to guest memory
+(`TextureCache::DownloadImageMemory`; under VRAM pressure, the texture cache's garbage collector does it for each image
+it evicts) by retiling it with a compute shader straight into the host-visible readback buffer. The shader writes in
+tiled order, a few bytes at a time across PCIe: about 0.75 s for a 3840×2160 render target on an RTX 4080 SUPER, while
+the game waits. Under `ANYPS5_KYTY`, when the readback buffer is not device-local, `TileManager` copies the readback
+range into its device-local scratch buffer, tiles there, and copies the range back with one `vkCmdCopyBuffer`; the bytes
+the shader does not write keep the guest value they had, as before. If the scratch buffer is not device-local either,
+the shader writes to the readback buffer as before. Stray with 8 GiB of the 16 GiB held by another process: worst frame
+5.46 s → 0.57 s, readbacks over 100 ms 9 → 0; with a second Stray on the GPU: 6.74 s → 0.67 s; the same images
+(`notes/kyty-tile-via-vram.md`). `KYTY_TILE_VIA_VRAM=0` restores KytyPS5's behaviour; any value other than empty, `0` or
+`1` stops the emulator with a message naming the variable.
+
+Image readbacks write only the bytes the GPU produced: `TextureCache::DownloadImageMemory` reads the image's whole guest
+footprint when it records the readback, tiles the image into that copy, and KytyPS5 then writes the whole footprint back
+when the GPU is done. Every byte the game, or the write-back of another image, changed in between is put back to the old
+read: block padding, an unused tail block, mips and slices the GPU never wrote, memory reused for other data. The console
+writes only the texels a command produces (`notes/re-overwrite-audit.md`). Under `ANYPS5_KYTY` the readback keeps the bytes
+it read, and when the GPU is done it rereads guest memory and writes, in 64-byte steps, only the bytes where the GPU result
+differs from the first read and guest memory still holds that read; it skips the rest and reports
+`image write-back kept bytes the game wrote after the read` when it left a byte the game changed. Cost: one copy of the
+footprint when the readback is recorded and one read and compare when it lands, with reused host buffers. Both
+`KYTY_TILE_VIA_VRAM` paths go through it (`notes/tile-via-vram.md`, issues #30 and #108). `KYTY_COMPARE_WRITE_BACK=0`
+restores KytyPS5's behaviour; any value other than empty, `0` or `1` stops the emulator with a message naming the variable.
+
+Guest flips: KytyPS5 completes a flip (`VideoOutDriver::CompleteFlip`, which makes the request ready for presentation;
+the title's flip event follows) on its priority thread, once the GPU has finished the command buffer that holds the
+presentation copy. The title then waits for the end of the GPU's work before it submits its next frame. Under
+`ANYPS5_KYTY`, `CommandScheduler::DeferFlipCompletion` completes the flip on a thread of its own, outside the
+scheduler's locks, once that command buffer has been submitted to the Vulkan queue and the GPU has finished the command
+buffer of the previous flip, with the priority operations queued before it. The present blit is submitted after the copy
+on the same queue and its barrier waits for the copy, so the presented image does not change; the title's next frame
+overlaps the end of the GPU's work on this one, with at most two frames in flight. The display buffer the flip frees is
+the one shown before, whose copy the GPU has finished, and a title that renders into a display buffer first waits for it
+on the GPU (rendering wait packet). Measured on Subnautica, in two sessions of 17 paired periods of 10 s: +1.7 % and
++4.8 % frames per second, the same images (`notes/au-dela-p9-bascule.md`). `KYTY_EARLY_FLIP=0` restores KytyPS5's behaviour; any value other than empty, `0` or
+`1` stops the emulator with a message naming the variable.
+
+Idle submit and the walk's page reads: on an open-world AAA title at 4K with native ray tracing, the GPU is idle about
+5 ms of a 19 ms frame, in some 40 gaps between command buffers. Most gaps open while the execution thread builds the next
+command buffer: early in the frame it builds compute work more slowly than the GPU runs it, and about nine times a frame it
+waited for the GPU to finish all its work. Those waits came from the shader resource table walk: it read descriptor tables
+that share a 16 KiB page with data shaders write through device addresses, the write bitmap marks the whole page, the walk's
+load faulted, and the fault handler copied the page back after the GPU finished everything. A probe that compared the bytes
+before and after each such copy found them unchanged in every read in game; reading around page marks without the copy
+removed those waits, but left the pages protected, so every later load of the walk and of the resolve thread faulted, and
+the frame rate dropped by 5 %: that path was not kept. Two smaller changes were. `KYTY_SRT_WALKER_PROBE` installs the walk's
+guest-memory provider (`SetSrtWalkerGuestMemory`), which the import carried but nothing installed: on the execution thread a
+load from a page that may fault goes through the same around-GPU-writes read as the fault handler, without the signal, and a
+load it cannot serve still faults. `KYTY_IDLE_SUBMIT` submits the open command buffer after a draw or a dispatch when the GPU
+has finished everything else, so it starts on the new work while the execution thread goes on; while the GPU still runs, it
+reads the semaphore value the scheduler already knows and asks the driver at most once every 25 µs. Measured with the
+setting switched every 10 s inside one session (14 periods in game, neighbouring periods compared), on the open-world title:
++1.6 % frames per second for the walk's provider, +4.1 % for the idle submit (from 47 to 60 submissions a frame); on Stray,
+whose execution thread is the wall, both within ±1 % (the idle submit takes it from 114 to 181 submissions a frame). Same
+images. Either variable at `0` restores the previous behaviour; another value stops the emulator with a message naming the
+variable.
+
+Suspend points: KytyPS5 makes `sceAgcSuspendPoint` (`GuestGpu::SuspendPoint`) acquire a binary semaphore that its
+priority thread releases once the GPU has finished the work queued before the previous suspend point, so a title can
+never queue work more than one suspend point ahead of the GPU. On the console, and in the AnyPS5 driver
+(`Driver::SuspendPoint`), a suspend point only marks a place where the system may suspend the title, and it returns at
+once. Under `ANYPS5_KYTY` the semaphore counts up to `KYTY_SUSPEND_POINT_DEPTH` suspend points in flight, 8 by default,
+and a suspend point that follows a flip also waits until the GPU has finished the work before the previous such suspend
+point, so a title never runs more than one frame ahead of the GPU: the AnyPS5 driver keeps the same bound by holding a
+submission that carries a flip until the earlier flip's work is done. Balatro calls it once a frame, after a submission
+that ends with a flip, and has no other fence before it rewrites its transient vertex memory: with eight frames in flight
+it rewrote vertex buffer tables the command processor had not read yet, and stopped at launch on a vertex buffer
+descriptor with `ADD_TID` set (`notes/balatro-regression.md`). Stray calls it after each
+submission, about five times a frame: with one in flight it could not submit a frame before the GPU had finished the
+previous one, and the stages sat idle for the GPU's tail every frame. The depth has to cover a whole frame of suspend
+points: on Stray at 4,240 draws a frame, depths 1, 4, 8 and 16 give 56.2, 56.5, 71.6 and 71.9 frames per second, the same
+images; Subnautica gives 208.6 and 212.7 at depths 1 and 8 (`notes/stray-perf-cpu.md`). `KYTY_SUSPEND_POINT_DEPTH=1`
+restores KytyPS5's behaviour; a value outside 1 to 64 stops the emulator with a message naming the variable.
+
+Deferred labels: while an occlusion-counter dump waits for the end of its command buffer, or while a queue has a deferred
+label, KytyPS5 defers each `RELEASE_MEM` label to the end of the command buffer it was recorded into, on the same
+first-in first-out priority queue as the dump publications, so that labels and occlusion counters become visible in the
+order the GPU wrote them. That order only needs a label to wait for the dumps older than it, not for its own command
+buffer: when nothing is pending, KytyPS5 already writes a label as soon as the execute thread reaches it, and the buffer
+and texture caches keep the data the GPU wrote before it. Under `ANYPS5_KYTY`, with `KYTY_LABELS_AFTER_DUMPS` at 1, the
+default, a deferred label waits for the command buffer of the newest pending dump instead of its own, still behind every
+older priority operation, and a priority operation never takes an older tick than the one queued before it, which
+`WaitPriorityOperations` relies on. While any queue has a deferred label, every queue defers its labels: otherwise a
+queue with none pending writes its label at once, ahead of an older label of another queue that the game may already have
+waited for, and Stray recycles that older label's memory before its write lands (a crash in its small-block allocator
+at address 1). Unreal Engine 4 keeps occlusion queries pending almost all the time, and the command processor waits about
+once a frame for a deferred label: on Stray at 4,240 draws a frame, the execute thread goes from 81 to 95 percent of the
+frame and the frame rate from 71.0 to 80.1 and 80.9 frames per second, the same images (`notes/stray-label-flush.md`).
+`KYTY_LABELS_AFTER_DUMPS=0` restores KytyPS5's behaviour; another value stops the emulator with a message naming the
+variable.
+
+A label that cannot be deferred is written at once, and while another label is deferred, the execute thread first waits
+for every command buffer and priority operation before it (a full drain), so that labels stay in order. KytyPS5 only
+defers a label whose page the cache does not hold as written by the GPU: a label sharing its page with a few bytes a shader
+writes drains the GPU each time another label is pending. Under `ANYPS5_KYTY`, with `KYTY_LABELS_AROUND_GPU_WRITES` at 1,
+the default, such a label is then deferred behind the pending ones when none of its own bytes holds data the GPU wrote and
+the backing view of guest memory holds it: its completion writes it there without a fault, as the immediate write does
+after the drain; with no label pending, it is still written at once. A title that
+keeps occlusion queries or labels pending and places a label next to a GPU-written counter (a barrier table, for example)
+drained the GPU about once a frame, 5.7 ms each, 2.78 s every 10 s on a heavy city scene; the line `[kyty-labels]`, every
+10 s on stderr, counts the labels deferred this way and the drains that remain. `KYTY_LABELS_AROUND_GPU_WRITES=0` restores
+KytyPS5's behaviour; another value stops the emulator with a message naming the variable.
+
+Blocked waits on deferred writes: KytyPS5's command processor submits the open command buffer after a pass over a
+submission that made progress, but not after one that yields to another queue, nor when a queue resumes straight into a
+wait that still fails. If the value that queue waits for is a deferred write recorded into the open command buffer, and
+no other submission comes, nothing submits that buffer and the title hangs. Under `ANYPS5_KYTY`, a queue that blocks
+without progress on a range with a pending deferred write submits the open command buffer, and submits it again only when
+a newer deferred write lands on that range while it still waits, whatever `KYTY_LABELS_AFTER_DUMPS` says; deferring the
+labels of every queue makes the case more likely in titles without occlusion queries.
+
+`m_program_lock`, the spin lock of `graphics/host_gpu/renderer/pipeline/pipelineCache.cpp` that guards the program
+cache, has a narrower scope than upstream's in this build (`programLock.cpp`). The resolve thread always runs upstream's
+unlocked ahead mode, which upstream only uses with `KYTY_RESOLVE_HELPER=1`, and the execute thread releases the lock
+while it materializes the resources of a cached program, which can wait for the GPU when it reads GPU-written buffers.
+A waiter spins briefly, then yields. `KYTY_PROGRAM_LOCK`, `KYTY_LOCK_STATS` and `KYTY_LOCK_STATS_PERIOD` are read once.
+
+KytyPS5's `native_rt` is off by default and its launcher's recommended settings turn it on; under `ANYPS5_KYTY` the
+shim turns it on unless `KYTY_NATIVE_RT=0`, and Kyty enables the ray query extensions only on a device that has them.
+Once the device exists, `KytyShim::ReportNativeRayTracing()` prints one `[kyty] native ray tracing` line on stderr:
+on, off by `KYTY_NATIVE_RT=0`, or unavailable with the missing extension or feature named, in which case ray tracing
+runs emulated as with `0`; with `KYTY_NATIVE_RT=1` that last case stops the emulator instead. `KYTY_RT_STATS` takes
+effect whenever native ray tracing is on, and so does `KYTY_RT_ORACLE`, which adds a `[kyty] BVH intersections of … answer
+from host ray queries` line and enters the key of every compiled compute program. `KYTY_RT_ARENA_MB` (MiB) replaces the limit of the memory the native BLASes
+take, a quarter of the largest device-local heap clamped to 512 MiB to 4 GiB; it is read by
+`graphics/host_gpu/renderer/rayTracingSlots.cpp`.
+
+With native ray tracing on, a BVH intersection that neither a form nor a host ray query serves runs empty: its box
+nodes have no child, so the walk ends and its rays miss, while its triangle test stays exact. The program logs one
+`[RT] cs 0x…: N of M BVH intersections run empty` line per session, its `[RT]` summaries count its dispatches, and with
+`KYTY_RT_CHECK` it gets an `empty` row in `<title>.rt`. A pixel shader's BVH walk without bit 8 of `KYTY_RT_ORACLE`
+stays emulated (`[RT] ps 0x…: pixel walk kept on the guest traversal`), and so do the lanes a form site leaves to the
+guest walk for a leaf test the host does not run (`[RT] cs 0x…: site N leaves … lanes to the guest walk`). The emulated walk serves every BVH walk only
+with `KYTY_NATIVE_RT=0` or on a GPU without ray queries, and the reference variant of `KYTY_RT_CHECK`. A host TLAS
+walk that finds BLASes the host has not built yet, TLAS memory it has not cached yet or a full host structure still
+publishes its context: the rays of that dispatch miss what it left out, and the `[RT]` summary counts these walks and
+the instances they left out. `kyty_rt_probe` (target of a `kyty` build with `BUILD_TESTING=ON`, not built by
+default) recompiles such a shader offline, from its raw machine code, as the driver does with native ray tracing on:
+`kyty_rt_probe [--wave 32|64] [--group X Y Z] [--scratch dwords] [--lds dwords] [--dump] [--spirv out.spv] <shader.bin>...`
+prints, per file, its BVH intersections, how many of them trace with ray queries, and the TLAS source and instance
+record layout derived for them, and exits with 0 only when every intersection does. `--dump` adds the IR, `--off`
+compiles as with `KYTY_NATIVE_RT=0`, `--oracle 0-15` as with `KYTY_RT_ORACLE`, `--stats` as with `KYTY_RT_STATS=1`, and
+`--subgroup 32` translates a wave of 64 for a GPU with subgroups of 32, as the driver does there, `--stage pixel` translates a
+pixel shader (`--inputs N` interpolated inputs, 8 by default) instead of a compute one; the line then ends with
+`oracle=N lane=M empty=E`, the intersections that answer from a host ray query, those of them that do it lane by lane,
+and those that run empty.
+
+To probe directly from the game's local pipeline manifest code cache, use
+`kyty_rt_probe --cache _PipelineCache/<title>_<version>.code --hash 0x<shader-hash>`.
+Use the compute shader hash from the log. The probe verifies the selected record and reads the cache without
+writing to it. Supply `--wave`, `--group` and the other shader settings as needed. The cache stores the program bytes.
+
+Fallbacks instead of stops (`KYTY_FALLBACKS`, on by default on Linux; off on Windows, where the C++ exception that carries a fallback is not caught across the guest libc yet): KytyPS5 stops the emulator (`EXIT`, `EXIT_IF`,
+`EXIT_NOT_IMPLEMENTED`) on anything it does not handle. Where the stop concerns one draw or one dispatch and nothing else
+depends on it, the build skips that draw or dispatch instead and writes one `[HACK]` line the first time per shader,
+naming the stop and its source line: a shader the recompiler cannot decode, translate or emit, and a shader stage whose
+inputs cannot be prepared. A failed shader is remembered (the whole program when no variant of it ever compiled,
+otherwise that variant), so it is not translated again for each draw; the other variants of the program keep drawing.
+A background compile that stops is dropped, and the draw compiles it again. A pipeline manifest record that stops while
+it is replayed is dropped, as with exceptions enabled. The command processor ignores a write to a register it does not
+know (direct `SET_*_REG` packets and indirect register lists) and a GPU event type it does not know, with one `[HACK]`
+line per register or event; the packet lengths come from the headers, so the rest of the stream is read as before. The
+unknown registers are entries of the register tables, so the loops that apply known registers are unchanged. A fallback
+only replaces a stop: nothing changes for a shader that compiles or a register Kyty knows. `KYTY_FALLBACKS=0` restores
+every stop, except a write of 0 to context register `0x24a`, which Kyty already ignored in indirect lists and now also
+ignores in a direct `SET_CONTEXT_REG`.
+
+`CONTEXT_CONTROL` (PM4 opcode `0x28`) with register loading and shadowing off is accepted as the no-op it is on the
+console, as AnyPS5's driver does; with either on, it still stops with the two control words.
+
+### Adding a setting
+
+A pull request that makes the code under `core/` read a new `KYTY_*` name adds its row to the tables above, with its default taken from the code, and one that stops reading a name removes the row. `python3 tools/check_kyty_settings.py` lists what is missing or stale; the `conventions` job of [the AnyKyty workflow](../../.github/workflows/anykyty.yml) runs it. A new `ANYPS5_*` or `APS5_*` name also needs its row in [ENVIRONMENT](ENVIRONMENT.md).
