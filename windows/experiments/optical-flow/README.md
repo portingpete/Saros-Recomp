@@ -1,6 +1,6 @@
 # Saros optical frame generation on Windows
 
-The Windows optical-flow build delivered **122.04 and 123.15 driver-reported scanouts per second** on two 30-second moving prologue routes at 2560 × 1440. The game engine advanced at **29.80 and 29.91 FPS**. The layer generated five intermediate images for each original frame.
+The Windows optical-flow build delivered **122.04 and 123.15 driver-reported scanouts per second** on two 30-second moving prologue routes at 2560 × 1440. The game engine advanced at **29.80 and 29.91 FPS**. The layer generated five intermediate images for each original frame. A second run with the same binaries and settings delivered **114.79 and 109.58 scanouts/s** after refresh separation. Across the four route measurements the mean was **117.39 scanouts/s**.
 
 | Presentation method | Route | Game FPS | Vulkan presents/s | Distinct scanouts/s | Median scanout interval | 95th percentile |
 | --- | --- | ---: | ---: | ---: | ---: | ---: |
@@ -20,6 +20,8 @@ The Windows optical-flow build delivered **122.04 and 123.15 driver-reported sca
 | Deferred acquisition at 180 Hz | Wide turn | 29.91 | 179.63 | 123.15 | 5.56 ms | 16.67 ms |
 | Deferred acquisition at 240 Hz | Tight turn | 28.10 | 224.63 | 128.95 | 5.56 ms | 16.67 ms |
 | Deferred acquisition at 240 Hz | Wide turn | 26.44 | 211.59 | 114.04 | 5.56 ms | 19.45 ms |
+| Repeat at 180 Hz | Tight turn | 29.98 | 179.83 | 114.79 | 8.33 ms | 16.67 ms |
+| Repeat at 180 Hz | Wide turn | 29.03 | 174.19 | 109.74 | 8.33 ms | 19.45 ms |
 
 The graphics queue writes each generated image into one of twelve private 1440p images. A second queue acquires a display image when its presentation time arrives, copies the ready image into it and submits it for presentation. A GPU semaphore protects each private image until its copy finishes. At a target of 180 Hz, this raised the two-route mean from 109.29 to 122.60 scanouts/s. Eightfold generation at 240 Hz reached 128.95 on the tight turn and 114.04 on the wide turn. [Measurements](measurements.json)
 
@@ -27,7 +29,7 @@ The capture layer copies images on the queue that presents them. Both deferred-a
 
 The host was a Core i9-14900K with a GeForce RTX 5080, driver 617.14 and a 360 Hz monitor. The game rendered at 100% scale with FXAA and its own frame interpolation disabled. A separate Vulkan layer ran optical flow at a scale of 0.75. The Windows client and Vulkan images measured 2560 × 1440 on an isolated desktop. The engine rate comes from Unreal's frame counter. The Vulkan rate counts successful presentation calls. The scanout rate counts distinct positive first-pixel-out timestamps reported by the driver. That stage tracks transmission to display hardware. The driver did not expose first-pixel-visible timing. [Vulkan stage definitions](https://docs.vulkan.org/refpages/latest/refpages/source/VkPresentStageFlagBitsEXT.html)
 
-The compressed CSV contains all 69,341 successful presents from sixteen route windows. Present IDs select submissions that returned during movement. Return times use host QPC nanoseconds from the first guest flip. Scanout times use Vulkan stage-local nanoseconds from the earliest positive report in the same route. A numeric zero marks this origin. An empty cell denotes a complete report without a positive timestamp. Original images have index −1. [Per-present evidence](per-present.csv.gz)
+The compressed CSV contains all 79,968 successful presents from eighteen route windows. Present IDs select submissions that returned during movement. Return times use host QPC nanoseconds from the first guest flip. Scanout times use Vulkan stage-local nanoseconds from the earliest positive report in the same route. A numeric zero marks this origin. An empty cell denotes a complete report without a positive timestamp. Original images have index −1. [Per-present evidence](per-present.csv.gz)
 
 On both sixfold deferred-acquisition routes, every distinct scanout timestamp was at least half a 360 Hz refresh apart. The conservative count gives the same 122.04 and 123.15 scanouts/s. Applying that filter to the eightfold trial gives 128.92 and 113.97. The verification script reproduces each rate from the per-present evidence. [Measurement script](summarize_presentations.py)
 
