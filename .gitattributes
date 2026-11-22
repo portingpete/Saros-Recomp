@@ -1,3 +1,4 @@
 # Preserve the byte hashes checked by the renderer source manifest.
 windows/renderer/** -text
 windows/experiments/interpolation/*.patch -text -whitespace
+windows/experiments/optical-flow/*.patch -text -whitespace

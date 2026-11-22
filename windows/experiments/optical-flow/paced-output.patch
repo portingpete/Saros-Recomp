@@ -1,0 +1,697 @@
+diff --git a/lsfg-vk-layer/src/entrypoint.cpp b/lsfg-vk-layer/src/entrypoint.cpp
+index 822acdf..dfa3001 100644
+--- a/lsfg-vk-layer/src/entrypoint.cpp
++++ b/lsfg-vk-layer/src/entrypoint.cpp
+@@ -12,6 +12,7 @@
+ #include <exception>
+ #include <iostream>
+ #include <string>
++#include <span>
+ #include <unordered_map>
+ #include <utility>
+ #include <vector>
+@@ -36,6 +37,8 @@ namespace {
+         vk::VulkanInstanceFuncs funcs;
+ 
+         std::unordered_map<VkDevice, vk::Vulkan> devices;
++        std::unordered_map<VkDevice, bool> relativeTiming;
++        std::unordered_map<VkDevice, std::pair<uint32_t,std::shared_ptr<PacedQueue>>> pacedQueues;
+         std::unordered_map<VkSwapchainKHR, ls::R<vk::Vulkan>> swapchains;
+         std::unordered_map<VkSwapchainKHR, SwapchainInfo> swapchainInfos;
+     }* instance_info; // NOLINT (global variable)
+@@ -161,9 +164,38 @@ namespace {
+         }
+ 
+         // create device
++        bool supportedRelative = false;
++        uint32_t pacedFamily=UINT32_MAX, pacedIndex=0;
+         try {
+             VkDeviceCreateInfo newInfo = *info;
+-            layer_info->root.modifyDeviceCreateInfo(newInfo,
++            auto queryFeatures = reinterpret_cast<PFN_vkGetPhysicalDeviceFeatures2>(
++                layer_info->GetInstanceProcAddr(instance_info->handles.front(), "vkGetPhysicalDeviceFeatures2"));
++            VkPhysicalDevicePresentTimingFeaturesEXT supported{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PRESENT_TIMING_FEATURES_EXT};
++            VkPhysicalDeviceFeatures2 features{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2, &supported};
++            if (queryFeatures) queryFeatures(physdev, &features);
++            supportedRelative = supported.presentAtRelativeTime;
++            std::vector<VkDeviceQueueCreateInfo> queues(info->pQueueCreateInfos, info->pQueueCreateInfos+info->queueCreateInfoCount);
++            std::vector<float> priorities;
++            const auto extensions=std::span(info->ppEnabledExtensionNames, info->enabledExtensionCount);
++            bool isWSI=std::any_of(extensions.begin(),extensions.end(),[](const char* ext){return std::string(ext)=="VK_KHR_swapchain";});
++            if(isWSI){
++                uint32_t count=0;
++                auto families=instance_info->funcs.GetPhysicalDeviceQueueFamilyProperties;
++                families(physdev,&count,nullptr);
++                std::vector<VkQueueFamilyProperties> properties(count);
++                families(physdev,&count,properties.data());
++                for(auto& candidate : queues){
++                    const auto& family=properties.at(candidate.queueFamilyIndex);
++                    if(candidate.flags || candidate.pNext || !(family.queueFlags & VK_QUEUE_GRAPHICS_BIT) || candidate.queueCount>=family.queueCount) continue;
++                    pacedFamily=candidate.queueFamilyIndex;
++                    pacedIndex=candidate.queueCount;
++                    priorities.assign(candidate.pQueuePriorities,candidate.pQueuePriorities+candidate.queueCount);
++                    priorities.push_back(1.f);
++                    candidate.pQueuePriorities=priorities.data(); ++candidate.queueCount;
++                    newInfo.pQueueCreateInfos=queues.data(); break;
++                }
++            }
++            layer_info->root.modifyDeviceCreateInfo(newInfo, supportedRelative,
+                 [=, newInfo = &newInfo]() {
+                     auto res = instance_info->funcs.CreateDevice(physdev, newInfo, alloc, device);
+                     if (res != VK_SUCCESS)
+@@ -179,6 +211,7 @@ namespace {
+ 
+         // create layer instance
+         try {
++            instance_info->relativeTiming.emplace(*device, supportedRelative);
+             instance_info->devices.emplace(
+                 *device,
+                 vk::Vulkan(
+@@ -188,6 +221,18 @@ namespace {
+                     true, setLoaderData
+                 )
+             );
++            if(pacedFamily!=UINT32_MAX){
++                const auto& vk=instance_info->devices.at(*device);
++                VkQueue queue{};
++                vk.df().GetDeviceQueue(*device,pacedFamily,pacedIndex,&queue);
++                if(queue && setLoaderData(*device,queue)==VK_SUCCESS) {
++                    const char* value=std::getenv("LSFGVK_SAROS_OUTPUT_HZ");
++                    unsigned hz=value ? static_cast<unsigned>(std::strtoul(value,nullptr,10)) : 120;
++                    if(hz<60 || hz>360) hz=120;
++                    instance_info->pacedQueues.emplace(*device,std::make_pair(pacedFamily,std::make_shared<PacedQueue>(vk,queue,hz)));
++                    std::fprintf(stderr,"[paced-output] dedicated queue family=%u index=%u target=%u Hz\n",pacedFamily,pacedIndex,hz);
++                }
++            }
+         } catch (const std::exception& e) {
+             // Non-fatal: this fires for auxiliary/probe devices that can't be frame-gen targets
+             // (e.g. ones created without swapchain support). The real presenting device attaches
+@@ -201,6 +246,9 @@ namespace {
+     // destroy device
+     void myvkDestroyDevice(VkDevice device, const VkAllocationCallbacks* alloc) {
+         // destroy layer instance
++        auto paced=instance_info->pacedQueues.find(device);
++        if(paced!=instance_info->pacedQueues.end()) {paced->second.second->drain();instance_info->pacedQueues.erase(paced);}
++        instance_info->relativeTiming.erase(device);
+         auto it = instance_info->devices.find(device);
+         if (it != instance_info->devices.end())
+             instance_info->devices.erase(it);
+@@ -301,6 +349,17 @@ namespace {
+ 
+             // create swapchain
+             VkSwapchainCreateInfoKHR newInfo = *info;
++            auto getCaps=reinterpret_cast<PFN_vkGetPhysicalDeviceSurfaceCapabilities2KHR>(
++                layer_info->GetInstanceProcAddr(it->second.inst(),"vkGetPhysicalDeviceSurfaceCapabilities2KHR"));
++            VkSurfaceCapabilitiesPresentId2KHR ids{VK_STRUCTURE_TYPE_SURFACE_CAPABILITIES_PRESENT_ID_2_KHR};
++            VkPresentTimingSurfaceCapabilitiesEXT timing{VK_STRUCTURE_TYPE_PRESENT_TIMING_SURFACE_CAPABILITIES_EXT};
++            VkSurfaceCapabilities2KHR caps{VK_STRUCTURE_TYPE_SURFACE_CAPABILITIES_2_KHR};
++            caps.pNext=&timing;timing.pNext=&ids;
++            VkPhysicalDeviceSurfaceInfo2KHR params{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SURFACE_INFO_2_KHR};params.surface=info->surface;
++            if(getCaps && getCaps(it->second.physdev(),&params,&caps)==VK_SUCCESS && ids.presentId2Supported && timing.presentTimingSupported &&
++               (timing.presentStageQueries&VK_PRESENT_STAGE_IMAGE_FIRST_PIXEL_OUT_BIT_EXT))
++                newInfo.flags|=VK_SWAPCHAIN_CREATE_PRESENT_TIMING_BIT_EXT|VK_SWAPCHAIN_CREATE_PRESENT_ID_2_BIT_KHR;
++            std::fprintf(stderr,"[output-timing] surface timing=%u ids=%u stages=%u abs=%u relative=%u flags=%u\n",timing.presentTimingSupported,ids.presentId2Supported,timing.presentStageQueries,timing.presentAtAbsoluteTimeSupported,timing.presentAtRelativeTimeSupported,newInfo.flags);
+             layer_info->root.modifySwapchainCreateInfo(it->second, newInfo,
+                 [=, newInfo = &newInfo]() {
+                     auto res = it->second.df().CreateSwapchainKHR(
+@@ -323,12 +382,24 @@ namespace {
+             if (res != VK_SUCCESS)
+                 throw ls::vulkan_error(res, "vkGetSwapchainImagesKHR() failed");
+ 
++            std::shared_ptr<PacedQueue> pacer;
++            auto familyQueue=instance_info->pacedQueues.find(device);
++            if(familyQueue!=instance_info->pacedQueues.end()){
++                auto support=reinterpret_cast<PFN_vkGetPhysicalDeviceSurfaceSupportKHR>(
++                    layer_info->GetInstanceProcAddr(it->second.inst(),"vkGetPhysicalDeviceSurfaceSupportKHR"));
++                VkBool32 canPresent=VK_FALSE;
++                if(support && support(it->second.physdev(),familyQueue->second.first,info->surface,&canPresent)==VK_SUCCESS && canPresent)
++                    pacer=familyQueue->second.second;
++            }
+             auto& info = instance_info->swapchainInfos.emplace(*swapchain, SwapchainInfo {
+                 .images = std::move(swapchainImages),
+                 .format = newInfo.imageFormat,
+                 .colorSpace = newInfo.imageColorSpace,
+                 .extent = newInfo.imageExtent,
+-                .presentMode = newInfo.presentMode
++                .presentMode = newInfo.presentMode,
++                .display_timing = (newInfo.flags & VK_SWAPCHAIN_CREATE_PRESENT_TIMING_BIT_EXT)!=0,
++                .relative_timing = instance_info->relativeTiming.at(device) && timing.presentAtRelativeTimeSupported,
++                .paced = pacer
+             }).first->second;
+ 
+             // create lsfg-vk swapchain
+@@ -422,6 +493,28 @@ namespace {
+ #pragma clang diagnostic pop
+     }
+ 
++    VkResult myvkDeviceWaitIdle(VkDevice device) {
++        auto paced=instance_info->pacedQueues.find(device);
++        if(paced!=instance_info->pacedQueues.end()) paced->second.second->drain(false);
++        auto wait=reinterpret_cast<PFN_vkDeviceWaitIdle>(instance_info->funcs.GetDeviceProcAddr(device,"vkDeviceWaitIdle"));
++        return wait(device);
++    }
++    VkResult myvkAcquireNextImageKHR(VkDevice device,VkSwapchainKHR chain,uint64_t timeout,VkSemaphore semaphore,VkFence fence,uint32_t* index) {
++        auto swap=instance_info->swapchainInfos.find(chain);
++        if(swap!=instance_info->swapchainInfos.end() && swap->second.paced) {
++            // Original images are acquired by the game after all images of the previous
++            // group have been released to WSI. Rendering can proceed on its own queue.
++            swap->second.paced->drain(false);
++        }
++        auto acquire=reinterpret_cast<PFN_vkAcquireNextImageKHR>(instance_info->funcs.GetDeviceProcAddr(device,"vkAcquireNextImageKHR"));
++        auto result=acquire(device,chain,timeout,semaphore,fence,index);
++        static std::atomic<unsigned> samples{0};
++        if (samples.fetch_add(1)<8 || (result!=VK_SUCCESS && result!=VK_SUBOPTIMAL_KHR))
++            std::fprintf(stderr,"[paced-acquire] timeout=%llu result=%d chain=%llx\n",
++                (unsigned long long)timeout,int(result),(unsigned long long)(uintptr_t)chain);
++        return result;
++    }
++
+     void myvkDestroySwapchainKHR(
+             VkDevice device,
+             VkSwapchainKHR swapchain,
+@@ -470,6 +563,8 @@ VkResult vkNegotiateLoaderLayerInterfaceVersion(VkNegotiateLayerInterface* pVers
+ #define VKPTR(name) reinterpret_cast<PFN_vkVoidFunction>(name)
+                 { "vkCreateInstance", VKPTR(myvkCreateInstance) },
+                 { "vkCreateDevice", VKPTR(myvkCreateDevice) },
++                { "vkDeviceWaitIdle", VKPTR(myvkDeviceWaitIdle) },
++                { "vkAcquireNextImageKHR", VKPTR(myvkAcquireNextImageKHR) },
+                 { "vkDestroyDevice", VKPTR(myvkDestroyDevice) },
+                 { "vkDestroyInstance", VKPTR(myvkDestroyInstance) },
+                 { "vkCreateSwapchainKHR", VKPTR(myvkCreateSwapchainKHR) },
+diff --git a/lsfg-vk-layer/src/instance.cpp b/lsfg-vk-layer/src/instance.cpp
+index e76633a..e768da0 100644
+--- a/lsfg-vk-layer/src/instance.cpp
++++ b/lsfg-vk-layer/src/instance.cpp
+@@ -92,6 +92,7 @@ void Root::modifyInstanceCreateInfo(VkInstanceCreateInfo& createInfo,
+         createInfo.enabledExtensionCount,
+         {
+             "VK_KHR_get_physical_device_properties2",
++            "VK_KHR_get_surface_capabilities2",
+             "VK_KHR_external_memory_capabilities",
+             "VK_KHR_external_semaphore_capabilities"
+         }
+@@ -102,7 +103,7 @@ void Root::modifyInstanceCreateInfo(VkInstanceCreateInfo& createInfo,
+     finish();
+ }
+ 
+-void Root::modifyDeviceCreateInfo(VkDeviceCreateInfo& createInfo,
++void Root::modifyDeviceCreateInfo(VkDeviceCreateInfo& createInfo, bool relativeTiming,
+         const std::function<void(void)>& finish) const {
+     if (!this->active_profile.has_value())
+         return;
+@@ -127,6 +128,15 @@ void Root::modifyDeviceCreateInfo(VkDeviceCreateInfo& createInfo,
+     createInfo.enabledExtensionCount = static_cast<uint32_t>(extensions.size());
+     createInfo.ppEnabledExtensionNames = extensions.data();
+ 
++    const bool isWsi=std::any_of(extensions.begin(),extensions.end(),[](const char* name) {
++        return std::string(name)=="VK_KHR_swapchain";
++    });
++    if(isWsi){
++        extensions=add_extensions(extensions.data(),static_cast<uint32_t>(extensions.size()),{
++            "VK_KHR_calibrated_timestamps","VK_KHR_present_id2","VK_EXT_present_timing"});
++        createInfo.ppEnabledExtensionNames=extensions.data();
++        createInfo.enabledExtensionCount=static_cast<uint32_t>(extensions.size());
++    }
+     bool isFeatureEnabled = false;
+     auto* featureInfo = reinterpret_cast<VkBaseInStructure*>(const_cast<void*>(createInfo.pNext));
+     while (featureInfo) {
+@@ -150,7 +160,17 @@ void Root::modifyDeviceCreateInfo(VkDeviceCreateInfo& createInfo,
+     };
+     if (!isFeatureEnabled)
+         createInfo.pNext = &timelineFeatures;
+-
++    VkPhysicalDevicePresentTimingFeaturesEXT timing{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PRESENT_TIMING_FEATURES_EXT};
++    VkPhysicalDevicePresentId2FeaturesKHR ids{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PRESENT_ID_2_FEATURES_KHR};
++    if(isWsi){
++        bool hasTiming=false,hasIds=false;
++        for(auto* n=(VkBaseInStructure*)createInfo.pNext;n;n=(VkBaseInStructure*)n->pNext){
++            if(n->sType==timing.sType){((VkPhysicalDevicePresentTimingFeaturesEXT*)n)->presentTiming=VK_TRUE;((VkPhysicalDevicePresentTimingFeaturesEXT*)n)->presentAtRelativeTime=relativeTiming;hasTiming=true;}
++            if(n->sType==ids.sType){((VkPhysicalDevicePresentId2FeaturesKHR*)n)->presentId2=VK_TRUE;hasIds=true;}
++        }
++        if(!hasTiming){timing.presentTiming=VK_TRUE;timing.presentAtRelativeTime=relativeTiming;timing.pNext=(void*)createInfo.pNext;createInfo.pNext=&timing;}
++        if(!hasIds){ids.presentId2=VK_TRUE;ids.pNext=(void*)createInfo.pNext;createInfo.pNext=&ids;}
++    }
+     finish();
+ }
+ 
+@@ -228,5 +248,6 @@ void Root::createSwapchainContext(const vk::Vulkan& vk,
+ }
+ 
+ void Root::removeSwapchainContext(VkSwapchainKHR swapchain) {
+-    this->swapchains.erase(swapchain);
++    auto current=this->swapchains.find(swapchain);
++    if(current != this->swapchains.end()){current->second.drain(); this->swapchains.erase(current);}
+ }
+diff --git a/lsfg-vk-layer/src/instance.hpp b/lsfg-vk-layer/src/instance.hpp
+index 35083b6..4f2f291 100644
+--- a/lsfg-vk-layer/src/instance.hpp
++++ b/lsfg-vk-layer/src/instance.hpp
+@@ -39,7 +39,7 @@ namespace lsfgvk::layer {
+         /// modify device create info
+         /// @param createInfo original create info
+         /// @param finish function to call after modification
+-        void modifyDeviceCreateInfo(VkDeviceCreateInfo& createInfo,
++        void modifyDeviceCreateInfo(VkDeviceCreateInfo& createInfo, bool relativeTiming,
+             const std::function<void(void)>& finish) const;
+ 
+         /// modify swapchain create info
+diff --git a/lsfg-vk-layer/src/output-timing.hpp b/lsfg-vk-layer/src/output-timing.hpp
+new file mode 100644
+index 0000000..41d9e4f
+--- /dev/null
++++ b/lsfg-vk-layer/src/output-timing.hpp
+@@ -0,0 +1,105 @@
++#pragma once
++#include <array>
++#include <atomic>
++#include <cstdio>
++#include <cstdlib>
++#include <vector>
++#include <windows.h>
++#include "lsfg-vk-common/vulkan/vulkan.hpp"
++
++namespace lsfgvk::layer {
++class OutputTiming {
++    bool attempted = false;
++    bool enabled = false;
++    uint64_t timeDomainId = 0;
++    PFN_vkGetPastPresentationTimingEXT past = nullptr;
++    static FILE* Log() {
++        static FILE* file=[] {
++            char path[2048]{};
++            const DWORD length=GetEnvironmentVariableA("SAROS_WSI_TIMES",path,sizeof(path));
++            if (!length || length>=sizeof(path)) return static_cast<FILE*>(nullptr);
++            FILE* result=std::fopen(path,"wb");
++            if(result) std::setvbuf(result,nullptr,_IOFBF,65536);
++            return result;
++        }();
++        return file;
++    }
++    void Start(const vk::Vulkan& vk,VkSwapchainKHR chain) {
++        attempted=true;
++        if (!Log()) return;
++        auto get=vk.fi().GetDeviceProcAddr;
++        auto domains=reinterpret_cast<PFN_vkGetSwapchainTimeDomainPropertiesEXT>(get(vk.dev(),"vkGetSwapchainTimeDomainPropertiesEXT"));
++        auto size=reinterpret_cast<PFN_vkSetSwapchainPresentTimingQueueSizeEXT>(get(vk.dev(),"vkSetSwapchainPresentTimingQueueSizeEXT"));
++        past=reinterpret_cast<PFN_vkGetPastPresentationTimingEXT>(get(vk.dev(),"vkGetPastPresentationTimingEXT"));
++        if(!size || !past || !domains) return;
++        uint64_t domainCounter=0;
++        VkSwapchainTimeDomainPropertiesEXT list{VK_STRUCTURE_TYPE_SWAPCHAIN_TIME_DOMAIN_PROPERTIES_EXT};
++        if(domains(vk.dev(),chain,&list,&domainCounter)!=VK_SUCCESS || !list.timeDomainCount) return;
++        std::vector<VkTimeDomainKHR> types(list.timeDomainCount);
++        std::vector<uint64_t> ids(list.timeDomainCount);
++        list.pTimeDomains=types.data();list.pTimeDomainIds=ids.data();
++        if(domains(vk.dev(),chain,&list,&domainCounter)!=VK_SUCCESS || !list.timeDomainCount) return;
++        unsigned selected=0;
++        for(unsigned i=0;i<list.timeDomainCount;i++) if(types[i]==VK_TIME_DOMAIN_QUERY_PERFORMANCE_COUNTER_KHR) selected=i;
++        timeDomainId=ids[selected];
++        const auto result=size(vk.dev(),chain,256);
++        std::fprintf(Log(),"config,%llx,%d,%llu,%d\n",(unsigned long long)(uintptr_t)chain,int(types[selected]),(unsigned long long)timeDomainId,int(result));
++        std::fflush(Log());
++        enabled=result==VK_SUCCESS;
++    }
++    void Drain(const vk::Vulkan& vk,VkSwapchainKHR chain) {
++        std::array<VkPastPresentationTimingEXT,16> results{};
++        std::array<std::array<VkPresentStageTimeEXT,4>,16> stages{};
++        for (unsigned i=0;i<results.size();i++) {
++            results[i].sType=VK_STRUCTURE_TYPE_PAST_PRESENTATION_TIMING_EXT;
++            results[i].presentStageCount=stages[i].size();
++            results[i].pPresentStages=stages[i].data();
++        }
++        VkPastPresentationTimingInfoEXT query{VK_STRUCTURE_TYPE_PAST_PRESENTATION_TIMING_INFO_EXT};
++        query.swapchain=chain;
++        VkPastPresentationTimingPropertiesEXT batch{VK_STRUCTURE_TYPE_PAST_PRESENTATION_TIMING_PROPERTIES_EXT};
++        batch.presentationTimingCount=results.size();batch.pPresentationTimings=results.data();
++        const VkResult status=past(vk.dev(),&query,&batch);
++        if(status!=VK_SUCCESS && status!=VK_INCOMPLETE) return;
++        for(unsigned i=0;i<batch.presentationTimingCount;i++){
++            const auto& result=results[i];
++            for(unsigned j=0;j<result.presentStageCount;j++){
++                const auto& stamp=stages[i][j];
++                std::fprintf(Log(),"out,%llx,%llu,%u,%llu,%d,%llu,%u\n",(unsigned long long)(uintptr_t)chain,
++                    (unsigned long long)result.presentId,stamp.stage,(unsigned long long)stamp.time,int(result.timeDomain),
++                    (unsigned long long)result.timeDomainId,result.reportComplete);
++            }
++        }
++    }
++public:
++    VkResult Present(const vk::Vulkan& vk,VkQueue queue,VkPresentInfoKHR const& original,
++                     uint64_t frame,int generated,VkExtent2D extent,bool supported,bool relativeSupported) {
++        if(!supported) return vk.df().QueuePresentKHR(queue,&original);
++        auto chain=original.pSwapchains[0];
++        if(!attempted) Start(vk,chain);
++        if(!enabled) return vk.df().QueuePresentKHR(queue,&original);
++        Drain(vk,chain);
++        static std::atomic<uint64_t> serial{0};
++        const uint64_t id=++serial;
++        VkPresentTimingInfoEXT request{VK_STRUCTURE_TYPE_PRESENT_TIMING_INFO_EXT};
++        request.presentStageQueries=VK_PRESENT_STAGE_IMAGE_FIRST_PIXEL_OUT_BIT_EXT;
++        request.timeDomainId=timeDomainId;
++        if(relativeSupported){
++            request.targetTime=8333333;
++            request.flags=VK_PRESENT_TIMING_INFO_PRESENT_AT_RELATIVE_TIME_BIT_EXT
++                        | VK_PRESENT_TIMING_INFO_PRESENT_AT_NEAREST_REFRESH_CYCLE_BIT_EXT;
++        }
++        VkPresentTimingsInfoEXT timing{VK_STRUCTURE_TYPE_PRESENT_TIMINGS_INFO_EXT};
++        timing.pNext=original.pNext;timing.swapchainCount=1;timing.pTimingInfos=&request;
++        VkPresentId2KHR identifier{VK_STRUCTURE_TYPE_PRESENT_ID_2_KHR};
++        identifier.pNext=&timing;identifier.swapchainCount=1;identifier.pPresentIds=&id;
++        VkPresentInfoKHR present=original;present.pNext=&identifier;
++        auto status=vk.df().QueuePresentKHR(queue,&present);
++        LARGE_INTEGER now,hz;QueryPerformanceCounter(&now);QueryPerformanceFrequency(&hz);
++        std::fprintf(Log(),"req,%llx,%llu,%llu,%d,%u,%u,%lld,%lld,%d\n",(unsigned long long)(uintptr_t)chain,
++            (unsigned long long)id,(unsigned long long)frame,generated,extent.width,extent.height,now.QuadPart,hz.QuadPart,int(status));
++        if((id%128)==0) std::fflush(Log());
++        return status;
++    }
++};
++}
+diff --git a/lsfg-vk-layer/src/paced-queue.hpp b/lsfg-vk-layer/src/paced-queue.hpp
+new file mode 100644
+index 0000000..d9e7068
+--- /dev/null
++++ b/lsfg-vk-layer/src/paced-queue.hpp
+@@ -0,0 +1,149 @@
++/* SPDX-License-Identifier: GPL-3.0-or-later */
++#pragma once
++
++#include "output-timing.hpp"
++#include <chrono>
++#include <condition_variable>
++#include <deque>
++#include <memory>
++#include <mutex>
++#include <thread>
++
++namespace lsfgvk::layer {
++using PresentWitness = void (*)(VkSwapchainKHR, uint64_t, int, uint32_t, VkExtent2D);
++
++struct PendingImage {
++    std::shared_ptr<OutputTiming> timing;
++    VkSwapchainKHR chain;
++    VkSemaphore ready;
++    uint32_t image;
++    uint64_t frame;
++    int generated;
++    VkExtent2D extent;
++    bool observe;
++    PresentWitness witness;
++};
++
++class PacedQueue {
++    const vk::Vulkan& vk;
++    VkQueue queue;
++    PFN_vkQueueWaitIdle waitQueue;
++    std::mutex mutex;
++    std::mutex swapchainAccess;
++    std::condition_variable changed;
++    std::deque<PendingImage> images;
++    bool stopping = false;
++    bool busy = false;
++    VkResult error = VK_SUCCESS;
++    HANDLE timer;
++    int64_t frequency = 0;
++    int64_t deadline = 0;
++    unsigned rate;
++    std::thread thread;
++
++    static int64_t now() {
++        LARGE_INTEGER counter;
++        QueryPerformanceCounter(&counter);
++        return counter.QuadPart;
++    }
++
++    void pace() {
++        int64_t current = now();
++        if (deadline == 0 || current - deadline > frequency / (rate * 2)) deadline = current;
++        const int64_t spin = frequency / 5000;
++        if (timer && deadline > current + spin) {
++            LARGE_INTEGER due;
++            due.QuadPart = -((deadline - current - spin) * 10000000 / frequency);
++            if (due.QuadPart < 0 && SetWaitableTimer(timer, &due, 0, nullptr, nullptr, FALSE))
++                WaitForSingleObject(timer, INFINITE);
++        }
++        while (now() < deadline) YieldProcessor();
++        deadline += frequency / rate;
++    }
++
++    void run() {
++        SetThreadDescription(GetCurrentThread(), L"Saros optical present");
++        SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_ABOVE_NORMAL);
++        for (;;) {
++            std::unique_lock lock(mutex);
++            changed.wait(lock, [this] { return stopping || !images.empty(); });
++            if (images.empty()) return;
++            const auto image = std::move(images.front());
++            images.pop_front();
++            busy = true;
++            lock.unlock();
++            pace();
++            VkPresentInfoKHR present{VK_STRUCTURE_TYPE_PRESENT_INFO_KHR};
++            present.swapchainCount = 1;
++            present.pSwapchains = &image.chain;
++            present.pImageIndices = &image.image;
++            present.waitSemaphoreCount = 1;
++            present.pWaitSemaphores = &image.ready;
++            std::unique_lock access(swapchainAccess);
++            auto result = image.timing->Present(vk, queue, present, image.frame,
++                image.generated, image.extent, image.observe, false);
++            if (result == VK_SUCCESS || result == VK_SUBOPTIMAL_KHR)
++                image.witness(image.chain, image.frame, image.generated, image.image, image.extent);
++            access.unlock();
++            lock.lock();
++            if (result != VK_SUCCESS && (error == VK_SUCCESS || result < 0)) error = result;
++            busy = false;
++            changed.notify_all();
++        }
++    }
++public:
++    PacedQueue(const vk::Vulkan& device, VkQueue selected, unsigned hz) :
++        vk(device), queue(selected),
++        waitQueue(reinterpret_cast<PFN_vkQueueWaitIdle>(vk.fi().GetDeviceProcAddr(vk.dev(), "vkQueueWaitIdle"))),
++        timer(CreateWaitableTimerExW(nullptr, nullptr, CREATE_WAITABLE_TIMER_HIGH_RESOLUTION, TIMER_ALL_ACCESS)),
++        rate(hz) {
++        LARGE_INTEGER value;
++        QueryPerformanceFrequency(&value);
++        frequency = value.QuadPart;
++        thread = std::thread([this] { run(); });
++    }
++    ~PacedQueue() {
++        {
++            std::lock_guard lock(mutex);
++            stopping = true;
++        }
++        changed.notify_all();
++        thread.join();
++        if (timer) CloseHandle(timer);
++    }
++
++    VkResult acquire(VkSwapchainKHR chain, uint64_t timeout, VkSemaphore sem, VkFence fence, uint32_t* index) {
++        // Wait without the host lock between polls so that the output thread
++        // can release the earlier images while the producer waits for one.
++        const auto start = std::chrono::steady_clock::now();
++        for (;;) {
++            VkResult result;
++            {
++                std::lock_guard lock(swapchainAccess);
++                result = vk.df().AcquireNextImageKHR(vk.dev(), chain, 0, sem, fence, index);
++            }
++            if (result != VK_NOT_READY && result != VK_TIMEOUT) return result;
++            if (timeout == 0) return VK_NOT_READY;
++            const auto elapsed = std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now()-start).count();
++            if (static_cast<uint64_t>(elapsed) >= timeout) return VK_TIMEOUT;
++            std::this_thread::sleep_for(std::chrono::microseconds(200));
++        }
++    }
++    VkResult submit(PendingImage image) {
++        std::lock_guard lock(mutex);
++        images.push_back(std::move(image));
++        changed.notify_one();
++        return error;
++    }
++
++    VkResult drain(bool idle = true) {
++        std::unique_lock lock(mutex);
++        changed.wait(lock, [this] { return images.empty() && !busy; });
++        VkResult result = idle ? waitQueue(queue) : VK_SUCCESS;
++        if (result == VK_SUCCESS) result = error;
++        error = VK_SUCCESS;
++        return result;
++    }
++};
++}
++
+diff --git a/lsfg-vk-layer/src/swapchain.cpp b/lsfg-vk-layer/src/swapchain.cpp
+index 8234119..e1c97e7 100644
+--- a/lsfg-vk-layer/src/swapchain.cpp
++++ b/lsfg-vk-layer/src/swapchain.cpp
+@@ -24,7 +24,36 @@
+ using namespace lsfgvk;
+ using namespace lsfgvk::layer;
+ 
++#ifdef _WIN32
++#include <cstdio>
++#include <windows.h>
++#endif
++
+ namespace {
++    void OpticalPresentSample(VkSwapchainKHR chain, uint64_t gameFrame, int generatedIndex,
++                              uint32_t imageIndex, VkExtent2D extent) {
++#ifdef _WIN32
++        static FILE* file = [] {
++            char path[2048]{};
++            DWORD len = GetEnvironmentVariableA("SAROS_OPTICAL_PRESENT_CSV", path, sizeof(path));
++            if (!len || len >= sizeof(path)) return static_cast<FILE*>(nullptr);
++            FILE* output = std::fopen(path, "wb");
++            if (output) {
++                std::setvbuf(output, nullptr, _IOFBF, 65536);
++                std::fprintf(output, "qpc,hz,chain,source_frame,generated_index,image,width,height\n");
++            }
++            return output;
++        }();
++        if (!file) return;
++        static const long long hz = [] { LARGE_INTEGER frequency; QueryPerformanceFrequency(&frequency); return frequency.QuadPart; }();
++        LARGE_INTEGER now;
++        QueryPerformanceCounter(&now);
++        std::fprintf(file, "%lld,%lld,%llx,%llu,%d,%u,%u,%u\n", now.QuadPart, hz,
++                     (unsigned long long)(uintptr_t)chain, (unsigned long long)gameFrame,
++                     generatedIndex, imageIndex, extent.width, extent.height);
++        if (generatedIndex < 0 && (gameFrame % 32) == 0) std::fflush(file);
++#endif
++    }
+     VkImageMemoryBarrier barrierHelper(VkImage handle,
+             VkAccessFlags srcAccessMask,
+             VkAccessFlags dstAccessMask,
+@@ -123,6 +152,10 @@ Swapchain::Swapchain(const vk::Vulkan& vk, backend::Instance& backend,
+         });
+     }
+ 
++    if (this->info.paced) {
++        imageReady.reserve(this->info.images.size());
++        for (size_t n=0; n<this->info.images.size(); ++n) imageReady.emplace_back(vk);
++    }
+     const size_t frames = std::max(this->info.images.size(), this->destinationImages.size() + 2);
+     for (size_t i = 0; i < frames; i++) {
+         this->postCopySemaphores.emplace_back(
+@@ -139,6 +172,18 @@ VkResult Swapchain::present(const vk::Vulkan& vk,
+     const auto& swapchainImage = this->info.images.at(imageIdx);
+     const auto& sourceImage = this->sourceImages.at(this->fidx % 2);
+ 
++    const bool paced = this->info.paced && next_chain == nullptr;
++    if (!paced && this->info.paced) this->info.paced->drain();
++    auto publish = [&](const VkPresentInfoKHR& present, int generated) {
++        uint32_t image = *present.pImageIndices;
++        if (paced)
++            return this->info.paced->submit({outputTiming,swapchain,*present.pWaitSemaphores,
++                image,this->fidx,generated,this->info.extent,this->info.display_timing,OpticalPresentSample});
++        VkResult result = outputTiming->Present(vk,queue,present,this->fidx,generated,this->info.extent,this->info.display_timing,false);
++        if (result == VK_SUCCESS || result == VK_SUBOPTIMAL_KHR)
++            OpticalPresentSample(swapchain,this->fidx,generated,image,this->info.extent);
++        return result;
++    };
+     // schedule frame generation
+     try {
+         this->instance.get().scheduleFrames(this->ctx.get());
+@@ -213,7 +258,7 @@ VkResult Swapchain::present(const vk::Vulkan& vk,
+ 
+         // acquire swapchain image
+         uint32_t aqImageIdx{};
+-        auto res = vk.df().AcquireNextImageKHR(vk.dev(), swapchain,
++        auto res = paced ? this->info.paced->acquire(swapchain,UINT64_MAX,pass.acquireSemaphore.handle(),VK_NULL_HANDLE,&aqImageIdx) : vk.df().AcquireNextImageKHR(vk.dev(), swapchain,
+             UINT64_MAX, pass.acquireSemaphore.handle(),
+             VK_NULL_HANDLE,
+             &aqImageIdx
+@@ -261,8 +306,8 @@ VkResult Swapchain::present(const vk::Vulkan& vk,
+         }
+ 
+         const std::vector<VkSemaphore> signalSemaphores{
+-            pcs.first.handle(),
+-            pcs.second.handle()
++            paced ? imageReady.at(aqImageIdx).handle() : pcs.first.handle(),
++            paced && i+1==this->destinationImages.size() ? imageReady.at(imageIdx).handle() : pcs.second.handle()
+         };
+ 
+         cmdbuf.end(vk);
+@@ -277,16 +322,16 @@ VkResult Swapchain::present(const vk::Vulkan& vk,
+             .sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
+             .pNext = i ? nullptr : next_chain,
+             .waitSemaphoreCount = 1,
+-            .pWaitSemaphores = &pcs.first.handle(),
++            .pWaitSemaphores = &signalSemaphores.at(0),
+             .swapchainCount = 1,
+             .pSwapchains = &swapchain,
+             .pImageIndices = &aqImageIdx,
+         };
+-        res = vk.df().QueuePresentKHR(queue,
+-            &presentInfo);
++        res = publish(presentInfo,static_cast<int>(i));
+         if (res != VK_SUCCESS && res != VK_SUBOPTIMAL_KHR)
+             throw ls::vulkan_error(res, "vkQueuePresentKHR() failed");
+ 
++
+         this->idx++;
+     }
+ 
+@@ -295,15 +340,20 @@ VkResult Swapchain::present(const vk::Vulkan& vk,
+     const VkPresentInfoKHR presentInfo{
+         .sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
+         .waitSemaphoreCount = 1,
+-        .pWaitSemaphores = &lastPCS.second.handle(),
++        .pWaitSemaphores = paced ? &imageReady.at(imageIdx).handle() : &lastPCS.second.handle(),
+         .swapchainCount = 1,
+         .pSwapchains = &swapchain,
+         .pImageIndices = &imageIdx,
+     };
+-    auto res = vk.df().QueuePresentKHR(queue, &presentInfo);
++    auto res = publish(presentInfo,-1);
+     if (res != VK_SUCCESS && res != VK_SUBOPTIMAL_KHR)
+         throw ls::vulkan_error(res, "vkQueuePresentKHR() failed");
+ 
++
++    if(paced) {
++        auto released=this->info.paced->drain(false);
++        if(res==VK_SUCCESS) res=released;
++    }
+     this->fidx++;
+     return res;
+ }
+diff --git a/lsfg-vk-layer/src/swapchain.hpp b/lsfg-vk-layer/src/swapchain.hpp
+index 3c711a0..05dd797 100644
+--- a/lsfg-vk-layer/src/swapchain.hpp
++++ b/lsfg-vk-layer/src/swapchain.hpp
+@@ -12,6 +12,7 @@
+ #include "lsfg-vk-common/vulkan/timeline_semaphore.hpp"
+ #include "lsfg-vk-common/vulkan/vulkan.hpp"
+ 
++#include "paced-queue.hpp"
+ #include <cstdint>
+ #include <utility>
+ #include <vector>
+@@ -27,6 +28,9 @@ namespace lsfgvk::layer {
+         VkColorSpaceKHR colorSpace;
+         VkExtent2D extent;
+         VkPresentModeKHR presentMode;
++        bool display_timing{false};
++        bool relative_timing{false};
++        std::shared_ptr<PacedQueue> paced;
+     };
+ 
+     /// modify the swapchain create info based on the profile pre-swapchain creation
+@@ -58,7 +62,9 @@ namespace lsfgvk::layer {
+             VkQueue queue, VkSwapchainKHR swapchain,
+             void* next_chain, uint32_t imageIdx,
+             const std::vector<VkSemaphore>& semaphores);
++        void drain() { if (info.paced) info.paced->drain(); }
+     private:
++        std::vector<vk::Semaphore> imageReady;
+         std::vector<vk::Image> sourceImages;
+         std::vector<vk::Image> destinationImages;
+         ls::lazy<vk::TimelineSemaphore> syncSemaphore;
+@@ -75,6 +81,7 @@ namespace lsfgvk::layer {
+         ls::R<backend::Instance> instance;
+         ls::owned_ptr<ls::R<backend::Context>> ctx;
+         size_t idx{1};
++        std::shared_ptr<OutputTiming> outputTiming = std::make_shared<OutputTiming>();
+         size_t fidx{0}; // real frame index
+ 
+         ls::GameConf profile;

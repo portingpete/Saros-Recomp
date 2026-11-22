@@ -1,0 +1,10 @@
+{
+  "upstream": "https://github.com/56TR/lsfg-vk-windows",
+  "revision": "b03458e44eb5cc5a87537b3743f52617974e2389",
+  "patch_sha256": "322cc9dd726b84f0900e3037f3c916db78a1a5f094fd81aba736e143e13b3595",
+  "measured_layer_sha256": "ce4cb9327acb1efab5d855ac37dc590d4c23b544677f8c492518eb5fa3b951e0",
+  "separate_rebuild_sha256": "7e480ef7f762e2d182f437fb73ec6bbac093b2388001bba9b2a16bec04417d15",
+  "vulkan_headers": 335,
+  "architecture": "Windows x86-64",
+  "rebuild": "clean pinned checkout and Windows Release link"
+}

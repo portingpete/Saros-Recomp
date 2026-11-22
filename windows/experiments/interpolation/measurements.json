@@ -224,6 +224,20 @@
     "completed_flips_per_second": [
       65.6993,
       54.1201
-    ]
+    ],
+    "warmed_repeat": {
+      "completed_flips_per_second": [
+        67.3998,
+        56.5911
+      ],
+      "driver_cache_mb": 48.85,
+      "loaded_programs_modules_pipelines": [
+        559,
+        706,
+        528
+      ],
+      "exit_code": 0,
+      "telemetry_drops": 0
+    }
   }
 }

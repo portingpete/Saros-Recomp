@@ -17,6 +17,8 @@ The six images below came from consecutive calls to present during a separate ti
 
 The independently rebuilt renderer passed the Windows ABI check, entered the prologue and completed both moving routes at 65.70 and 54.12 flips/s. It loaded the Vulkan driver cache and rebuilt the game shader programs because its source stamp differed. The warmed benchmark above used the original measured renderer. [Rebuild and cache evidence](measurements.json)
 
+A second run of the independently built renderer loaded 559 guest programs, 706 modules, 528 pipelines and 48.85 MB of Vulkan driver cache. It completed the tight turn at 67.40 flips/s and the wide turn at 56.59 flips/s. Both routes passed the movement and screenshot checks and the process closed normally. [Rebuild measurements](measurements.json)
+
 ## Build and launch
 
 1. Reconstruct the source tree and generate the two headers from your local game files using the existing renderer instructions. Apply the experiment patch from the repository root before compiling the renderer. [Renderer instructions](../../renderer/README.md)
