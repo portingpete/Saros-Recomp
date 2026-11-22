@@ -1,6 +1,6 @@
 # Saros optical frame generation on Windows
 
-The optical-flow layer reached **109.29 distinct driver-reported scanouts per second** across two moving prologue routes at 2560 × 1440. The engine advanced **28.39 frames per second**. The layer generated five intermediate images per engine frame.
+The Windows optical-flow build delivered **122.04 and 123.15 driver-reported scanouts per second** on two 30-second moving prologue routes at 2560 × 1440. The game engine advanced at **29.80 and 29.91 FPS**. The layer generated five intermediate images for each original frame.
 
 | Presentation method | Route | Game FPS | Vulkan presents/s | Distinct scanouts/s | Median scanout interval | 95th percentile |
 | --- | --- | ---: | ---: | ---: | ---: | ---: |
@@ -16,16 +16,20 @@ The optical-flow layer reached **109.29 distinct driver-reported scanouts per se
 | GPU-ready, sixfold, up to two pending | Wide turn | 21.45 | 128.66 | 87.44 | 8.33 ms | 22.22 ms |
 | GPU-ready, sixfold, up to four pending | Tight turn | 29.07 | 174.16 | 110.11 | 8.33 ms | 16.67 ms |
 | GPU-ready, sixfold, up to four pending | Wide turn | 27.71 | 166.06 | 108.48 | 8.33 ms | 19.45 ms |
+| Deferred acquisition at 180 Hz | Tight turn | 29.80 | 178.48 | 122.04 | 5.56 ms | 16.67 ms |
+| Deferred acquisition at 180 Hz | Wide turn | 29.91 | 179.63 | 123.15 | 5.56 ms | 16.67 ms |
+| Deferred acquisition at 240 Hz | Tight turn | 28.10 | 224.63 | 128.95 | 5.56 ms | 16.67 ms |
+| Deferred acquisition at 240 Hz | Wide turn | 26.44 | 211.59 | 114.04 | 5.56 ms | 19.45 ms |
 
-The layer spaces generated and original images on a second Vulkan queue in the same graphics family. Waiting for all four submissions gave 56.73 scanouts/s. Allowing two pending raised this to 82.22. The sixfold build waits for the GPU to finish each output image before submitting it at a target cadence of 180 Hz. It allows four pending on the eight-image 1440p swapchain. Both routes covered 30 seconds of simultaneous running and camera rotation. [Measurements](measurements.json)
+The graphics queue writes each generated image into one of twelve private 1440p images. A second queue acquires a display image when its presentation time arrives, copies the ready image into it and submits it for presentation. A GPU semaphore protects each private image until its copy finishes. At a target of 180 Hz, this raised the two-route mean from 109.29 to 122.60 scanouts/s. Eightfold generation at 240 Hz reached 128.95 on the tight turn and 114.04 on the wide turn. [Measurements](measurements.json)
 
-The capture layer copies each image on the queue that presents it. The sixfold run recorded six timed gameplay captures, had zero dropped telemetry records and exited cleanly. The longest gap between reported scanouts was 41.67 ms on the tight turn and 361.13 ms on the wide turn. Earlier trials encountered a device loss with a different capture queue and a guest readback after renderer shutdown. The latter led to an exit fix that drains issued GPU work and keeps the readback worker available to guest threads until Windows terminates the process. [Shutdown patch](exit-readbacks.patch)
+The capture layer copies images on the queue that presents them. Both deferred-acquisition runs reached the checkpoint, passed movement checks and exited cleanly. The longest gap between scanouts on the sixfold run was 161.12 ms on the tight turn and 38.89 ms on the wide turn. The renderer drains issued GPU work and keeps its readback worker available during process exit. [Shutdown patch](exit-readbacks.patch)
 
 The host was a Core i9-14900K with a GeForce RTX 5080, driver 617.14 and a 360 Hz monitor. The game rendered at 100% scale with FXAA and its own frame interpolation disabled. A separate Vulkan layer ran optical flow at a scale of 0.75. The Windows client and Vulkan images measured 2560 × 1440 on an isolated desktop. The engine rate comes from Unreal's frame counter. The Vulkan rate counts successful presentation calls. The scanout rate counts distinct positive first-pixel-out timestamps reported by the driver. That stage tracks transmission to display hardware. The driver did not expose first-pixel-visible timing. [Vulkan stage definitions](https://docs.vulkan.org/refpages/latest/refpages/source/VkPresentStageFlagBitsEXT.html)
 
-The compressed CSV contains all 45,494 successful presents from the twelve route windows. Present IDs select the submissions that returned within each route. Return times are in host QPC nanoseconds from the first guest flip. Scanout times are in Vulkan stage-local nanoseconds from the earliest positive report in that cohort. A numeric zero marks this origin. An empty cell represents a complete report without a positive timestamp. Rates and intervals use distinct timestamps within a single stage clock. The original image has index −1. In the four-pending sixfold run, 6,562 of 10,212 successful presents had positive stage timestamps. Two tight-turn presents shared one timestamp, leaving 6,561 distinct scanouts. [Per-present evidence](per-present.csv.gz)
+The compressed CSV contains all 69,341 successful presents from sixteen route windows. Present IDs select submissions that returned during movement. Return times use host QPC nanoseconds from the first guest flip. Scanout times use Vulkan stage-local nanoseconds from the earliest positive report in the same route. A numeric zero marks this origin. An empty cell denotes a complete report without a positive timestamp. Original images have index −1. [Per-present evidence](per-present.csv.gz)
 
-Seven pairs on each sixfold route had distinct driver timestamps only 100 ns apart. Counting timestamps at least half a 360 Hz refresh apart gives 109.87 and 108.24 scanouts/s, averaging 109.06. Counting each distinct timestamp gives 110.11 and 108.48. The included script reproduces both counts for every route from the compressed CSV. [Measurement script](summarize_presentations.py)
+On both sixfold deferred-acquisition routes, every distinct scanout timestamp was at least half a 360 Hz refresh apart. The conservative count gives the same 122.04 and 123.15 scanouts/s. Applying that filter to the eightfold trial gives 128.92 and 113.97. The verification script reproduces each rate from the per-present evidence. [Measurement script](summarize_presentations.py)
 
 Six consecutive original and generated swapchain images from the tight turn show the moving character, scenery and HUD. All six 2560 × 1440 source images had different hashes. The contact sheet shows the images submitted to Vulkan.
 

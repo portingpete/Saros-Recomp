@@ -48,7 +48,9 @@
       "optical_multiplier": 4,
       "target_output_hz": null,
       "renderer_sha256": "ae88b5a68da4cc9c95653d08c3b85d3aa17de398766688fd7cb269ccef53ac0c",
-      "positive_stage_reports": 1231
+      "positive_stage_reports": 1231,
+      "refresh_separated_timestamps": 1231,
+      "refresh_separated_fps": 40.987
     },
     {
       "variant": "unpaced",
@@ -80,7 +82,9 @@
       "optical_multiplier": 4,
       "target_output_hz": null,
       "renderer_sha256": "ae88b5a68da4cc9c95653d08c3b85d3aa17de398766688fd7cb269ccef53ac0c",
-      "positive_stage_reports": 1102
+      "positive_stage_reports": 1102,
+      "refresh_separated_timestamps": 1102,
+      "refresh_separated_fps": 36.714
     },
     {
       "variant": "driver_relative_120",
@@ -112,7 +116,9 @@
       "optical_multiplier": 4,
       "target_output_hz": 120,
       "renderer_sha256": "ae88b5a68da4cc9c95653d08c3b85d3aa17de398766688fd7cb269ccef53ac0c",
-      "positive_stage_reports": 995
+      "positive_stage_reports": 995,
+      "refresh_separated_timestamps": 995,
+      "refresh_separated_fps": 33.156
     },
     {
       "variant": "driver_relative_120",
@@ -144,7 +150,9 @@
       "optical_multiplier": 4,
       "target_output_hz": 120,
       "renderer_sha256": "ae88b5a68da4cc9c95653d08c3b85d3aa17de398766688fd7cb269ccef53ac0c",
-      "positive_stage_reports": 954
+      "positive_stage_reports": 954,
+      "refresh_separated_timestamps": 954,
+      "refresh_separated_fps": 31.745
     },
     {
       "variant": "paced_queue_120",
@@ -176,7 +184,9 @@
       "optical_multiplier": 4,
       "target_output_hz": 120,
       "renderer_sha256": "ae88b5a68da4cc9c95653d08c3b85d3aa17de398766688fd7cb269ccef53ac0c",
-      "positive_stage_reports": 1703
+      "positive_stage_reports": 1703,
+      "refresh_separated_timestamps": 1703,
+      "refresh_separated_fps": 56.75
     },
     {
       "variant": "paced_queue_120",
@@ -208,7 +218,9 @@
       "optical_multiplier": 4,
       "target_output_hz": 120,
       "renderer_sha256": "ae88b5a68da4cc9c95653d08c3b85d3aa17de398766688fd7cb269ccef53ac0c",
-      "positive_stage_reports": 1703
+      "positive_stage_reports": 1703,
+      "refresh_separated_timestamps": 1703,
+      "refresh_separated_fps": 56.716
     },
     {
       "variant": "two_pending_120",
@@ -240,7 +252,9 @@
       "optical_multiplier": 4,
       "target_output_hz": 120,
       "renderer_sha256": "ae88b5a68da4cc9c95653d08c3b85d3aa17de398766688fd7cb269ccef53ac0c",
-      "positive_stage_reports": 2535
+      "positive_stage_reports": 2535,
+      "refresh_separated_timestamps": 2535,
+      "refresh_separated_fps": 84.418
     },
     {
       "variant": "two_pending_120",
@@ -272,7 +286,9 @@
       "optical_multiplier": 4,
       "target_output_hz": 120,
       "renderer_sha256": "ae88b5a68da4cc9c95653d08c3b85d3aa17de398766688fd7cb269ccef53ac0c",
-      "positive_stage_reports": 2401
+      "positive_stage_reports": 2401,
+      "refresh_separated_timestamps": 2401,
+      "refresh_separated_fps": 80.017
     },
     {
       "variant": "gpu_ready_two_pending_180",
@@ -306,7 +322,9 @@
       "optical_multiplier": 6,
       "target_output_hz": 180,
       "renderer_sha256": "ae88b5a68da4cc9c95653d08c3b85d3aa17de398766688fd7cb269ccef53ac0c",
-      "positive_stage_reports": 2906
+      "positive_stage_reports": 2906,
+      "refresh_separated_timestamps": 2906,
+      "refresh_separated_fps": 96.751
     },
     {
       "variant": "gpu_ready_two_pending_180",
@@ -340,7 +358,9 @@
       "optical_multiplier": 6,
       "target_output_hz": 180,
       "renderer_sha256": "ae88b5a68da4cc9c95653d08c3b85d3aa17de398766688fd7cb269ccef53ac0c",
-      "positive_stage_reports": 2626
+      "positive_stage_reports": 2626,
+      "refresh_separated_timestamps": 2626,
+      "refresh_separated_fps": 87.437
     },
     {
       "variant": "four_pending_180",
@@ -374,7 +394,9 @@
       "optical_multiplier": 6,
       "target_output_hz": 180,
       "renderer_sha256": "b938cdd735e64cb6456fd37ba5ec62bcacddf41fc9bfab289113c3f3901a7da6",
-      "positive_stage_reports": 3305
+      "positive_stage_reports": 3305,
+      "refresh_separated_timestamps": 3297,
+      "refresh_separated_fps": 109.873
     },
     {
       "variant": "four_pending_180",
@@ -408,7 +430,165 @@
       "optical_multiplier": 6,
       "target_output_hz": 180,
       "renderer_sha256": "b938cdd735e64cb6456fd37ba5ec62bcacddf41fc9bfab289113c3f3901a7da6",
-      "positive_stage_reports": 3257
+      "positive_stage_reports": 3257,
+      "refresh_separated_timestamps": 3250,
+      "refresh_separated_fps": 108.244
+    },
+    {
+      "variant": "deferred_180",
+      "route": "seed_circle",
+      "duration_ns": 30014594900,
+      "world_units": 1329.816,
+      "exit_code": 0,
+      "engine_ticks": 893,
+      "engine_sample_interval_ns": 29965868000,
+      "engine_fps": 29.801,
+      "guest_flips_per_s": 29.7522,
+      "vulkan_presents_per_s": 178.48,
+      "vulkan_originals": 892,
+      "generated_presents": 4465,
+      "complete_stage_reports": 5357,
+      "positive_distinct": 3663,
+      "zero_stage_reports": 1694,
+      "scanout_fps": 122.041,
+      "first_to_last_scanout_fps": 122.006,
+      "median_scanout_ms": 5.556,
+      "p95_scanout_ms": 16.668,
+      "longest_scanout_ms": 161.1193,
+      "positive_by_generated_index": {
+        "0": 542,
+        "2": 706,
+        "3": 778,
+        "-1": 492,
+        "4": 653,
+        "1": 492
+      },
+      "optical_multiplier": 6,
+      "target_output_hz": 180,
+      "renderer_sha256": "b938cdd735e64cb6456fd37ba5ec62bcacddf41fc9bfab289113c3f3901a7da6",
+      "positive_stage_reports": 3663,
+      "refresh_separated_timestamps": 3663,
+      "refresh_separated_fps": 122.041,
+      "output_ring_slots": 12,
+      "output_ring_layer_sha256": "a2abfcf142892a16226745853681c5d8564058ef445d2839a1c2c215b8c88bbb"
+    },
+    {
+      "variant": "deferred_180",
+      "route": "circle_camera",
+      "duration_ns": 30027644300,
+      "world_units": 2441.689,
+      "exit_code": 0,
+      "engine_ticks": 895,
+      "engine_sample_interval_ns": 29921556050,
+      "engine_fps": 29.912,
+      "guest_flips_per_s": 29.9391,
+      "vulkan_presents_per_s": 179.634,
+      "vulkan_originals": 899,
+      "generated_presents": 4495,
+      "complete_stage_reports": 5394,
+      "positive_distinct": 3698,
+      "zero_stage_reports": 1695,
+      "scanout_fps": 123.153,
+      "first_to_last_scanout_fps": 123.149,
+      "median_scanout_ms": 5.557,
+      "p95_scanout_ms": 16.667,
+      "longest_scanout_ms": 38.8907,
+      "positive_by_generated_index": {
+        "-1": 471,
+        "3": 801,
+        "4": 713,
+        "1": 510,
+        "2": 646,
+        "0": 558
+      },
+      "optical_multiplier": 6,
+      "target_output_hz": 180,
+      "renderer_sha256": "b938cdd735e64cb6456fd37ba5ec62bcacddf41fc9bfab289113c3f3901a7da6",
+      "positive_stage_reports": 3699,
+      "refresh_separated_timestamps": 3698,
+      "refresh_separated_fps": 123.153,
+      "output_ring_slots": 12,
+      "output_ring_layer_sha256": "a2abfcf142892a16226745853681c5d8564058ef445d2839a1c2c215b8c88bbb"
+    },
+    {
+      "variant": "deferred_240",
+      "route": "seed_circle",
+      "duration_ns": 30018654100,
+      "world_units": 1572.934,
+      "exit_code": 0,
+      "engine_ticks": 840,
+      "engine_sample_interval_ns": 29892135700,
+      "engine_fps": 28.101,
+      "guest_flips_per_s": 28.0825,
+      "vulkan_presents_per_s": 224.627,
+      "vulkan_originals": 842,
+      "generated_presents": 5901,
+      "complete_stage_reports": 6743,
+      "positive_distinct": 3871,
+      "zero_stage_reports": 2872,
+      "scanout_fps": 128.953,
+      "first_to_last_scanout_fps": 129.031,
+      "median_scanout_ms": 5.556,
+      "p95_scanout_ms": 16.667,
+      "longest_scanout_ms": 41.6667,
+      "positive_by_generated_index": {
+        "0": 487,
+        "3": 487,
+        "4": 507,
+        "5": 493,
+        "-1": 505,
+        "2": 479,
+        "6": 448,
+        "1": 465
+      },
+      "optical_multiplier": 8,
+      "target_output_hz": 240,
+      "renderer_sha256": "b938cdd735e64cb6456fd37ba5ec62bcacddf41fc9bfab289113c3f3901a7da6",
+      "positive_stage_reports": 3871,
+      "refresh_separated_timestamps": 3870,
+      "refresh_separated_fps": 128.92,
+      "output_ring_slots": 16,
+      "output_ring_layer_sha256": "a2abfcf142892a16226745853681c5d8564058ef445d2839a1c2c215b8c88bbb"
+    },
+    {
+      "variant": "deferred_240",
+      "route": "circle_camera",
+      "duration_ns": 30025170500,
+      "world_units": 3582.671,
+      "exit_code": 0,
+      "engine_ticks": 792,
+      "engine_sample_interval_ns": 29949812700,
+      "engine_fps": 26.444,
+      "guest_flips_per_s": 26.4445,
+      "vulkan_presents_per_s": 211.589,
+      "vulkan_originals": 795,
+      "generated_presents": 5558,
+      "complete_stage_reports": 6353,
+      "positive_distinct": 3424,
+      "zero_stage_reports": 2929,
+      "scanout_fps": 114.038,
+      "first_to_last_scanout_fps": 114.085,
+      "median_scanout_ms": 5.556,
+      "p95_scanout_ms": 19.446,
+      "longest_scanout_ms": 180.5649,
+      "positive_by_generated_index": {
+        "-1": 425,
+        "1": 396,
+        "3": 444,
+        "5": 443,
+        "6": 434,
+        "4": 448,
+        "2": 417,
+        "0": 417
+      },
+      "optical_multiplier": 8,
+      "target_output_hz": 240,
+      "renderer_sha256": "b938cdd735e64cb6456fd37ba5ec62bcacddf41fc9bfab289113c3f3901a7da6",
+      "positive_stage_reports": 3424,
+      "refresh_separated_timestamps": 3422,
+      "refresh_separated_fps": 113.971,
+      "output_ring_slots": 16,
+      "output_ring_layer_sha256": "a2abfcf142892a16226745853681c5d8564058ef445d2839a1c2c215b8c88bbb"
     }
   ],
   "scope": "Each route covers 30 seconds of simultaneous character movement and camera rotation from the prologue checkpoint on an isolated Windows desktop. Scanout counts distinct positive timestamps at VK_PRESENT_STAGE_IMAGE_FIRST_PIXEL_OUT_BIT_EXT. The visible-pixel stage was unavailable.",

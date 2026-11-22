@@ -1,8 +1,38 @@
+diff --git a/lsfg-vk-common/include/lsfg-vk-common/vulkan/command_buffer.hpp b/lsfg-vk-common/include/lsfg-vk-common/vulkan/command_buffer.hpp
+index 0129238..935adfb 100644
+--- a/lsfg-vk-common/include/lsfg-vk-common/vulkan/command_buffer.hpp
++++ b/lsfg-vk-common/include/lsfg-vk-common/vulkan/command_buffer.hpp
+@@ -96,6 +96,7 @@ namespace vk {
+         /// @param vk the vulkan instance
+         /// @throws ls::vulkan_error on failure
+         void submit(const vk::Vulkan& vk) const;
++        [[nodiscard]] VkCommandBuffer handle() const { return *commandBuffer; }
+     private:
+         ls::owned_ptr<VkCommandBuffer> commandBuffer;
+     };
+diff --git a/lsfg-vk-common/include/lsfg-vk-common/vulkan/vulkan.hpp b/lsfg-vk-common/include/lsfg-vk-common/vulkan/vulkan.hpp
+index 35d73af..1772332 100644
+--- a/lsfg-vk-common/include/lsfg-vk-common/vulkan/vulkan.hpp
++++ b/lsfg-vk-common/include/lsfg-vk-common/vulkan/vulkan.hpp
+@@ -215,6 +215,7 @@ namespace vk {
+         [[nodiscard]] VkPhysicalDevice physdev() const { return this->phys_dev; }
+         /// get the command pool
+         /// @return the command pool handle
++        [[nodiscard]] uint32_t commandFamily() const { return queueFamilyIdx; }
+         [[nodiscard]] const auto& cmdpool() const { return this->cmdPool.get(); }
+         /// get the pipeline cache
+         /// @return the pipeline cache handle
 diff --git a/lsfg-vk-layer/src/entrypoint.cpp b/lsfg-vk-layer/src/entrypoint.cpp
-index 822acdf..4a2cba2 100644
+index 822acdf..4c28ed1 100644
 --- a/lsfg-vk-layer/src/entrypoint.cpp
 +++ b/lsfg-vk-layer/src/entrypoint.cpp
-@@ -12,6 +12,7 @@
+@@ -1,3 +1,5 @@
++#include <algorithm>
++#include <cstring>
+ /* SPDX-License-Identifier: GPL-3.0-or-later */
+ 
+ #include "instance.hpp"
+@@ -12,6 +14,7 @@
  #include <exception>
  #include <iostream>
  #include <string>
@@ -10,7 +40,7 @@ index 822acdf..4a2cba2 100644
  #include <unordered_map>
  #include <utility>
  #include <vector>
-@@ -36,6 +37,8 @@ namespace {
+@@ -36,6 +39,8 @@ namespace {
          vk::VulkanInstanceFuncs funcs;
  
          std::unordered_map<VkDevice, vk::Vulkan> devices;
@@ -19,7 +49,7 @@ index 822acdf..4a2cba2 100644
          std::unordered_map<VkSwapchainKHR, ls::R<vk::Vulkan>> swapchains;
          std::unordered_map<VkSwapchainKHR, SwapchainInfo> swapchainInfos;
      }* instance_info; // NOLINT (global variable)
-@@ -161,9 +164,38 @@ namespace {
+@@ -161,9 +166,38 @@ namespace {
          }
  
          // create device
@@ -59,7 +89,7 @@ index 822acdf..4a2cba2 100644
                  [=, newInfo = &newInfo]() {
                      auto res = instance_info->funcs.CreateDevice(physdev, newInfo, alloc, device);
                      if (res != VK_SUCCESS)
-@@ -179,6 +211,7 @@ namespace {
+@@ -179,6 +213,7 @@ namespace {
  
          // create layer instance
          try {
@@ -67,7 +97,7 @@ index 822acdf..4a2cba2 100644
              instance_info->devices.emplace(
                  *device,
                  vk::Vulkan(
-@@ -188,6 +221,18 @@ namespace {
+@@ -188,6 +223,18 @@ namespace {
                      true, setLoaderData
                  )
              );
@@ -86,7 +116,7 @@ index 822acdf..4a2cba2 100644
          } catch (const std::exception& e) {
              // Non-fatal: this fires for auxiliary/probe devices that can't be frame-gen targets
              // (e.g. ones created without swapchain support). The real presenting device attaches
-@@ -201,6 +246,9 @@ namespace {
+@@ -201,6 +248,9 @@ namespace {
      // destroy device
      void myvkDestroyDevice(VkDevice device, const VkAllocationCallbacks* alloc) {
          // destroy layer instance
@@ -96,7 +126,7 @@ index 822acdf..4a2cba2 100644
          auto it = instance_info->devices.find(device);
          if (it != instance_info->devices.end())
              instance_info->devices.erase(it);
-@@ -244,6 +292,8 @@ namespace {
+@@ -244,6 +294,8 @@ namespace {
  
      // get optional function pointer override
      PFN_vkVoidFunction getProcAddr(const std::string& name) {
@@ -105,7 +135,7 @@ index 822acdf..4a2cba2 100644
          auto it = layer_info->map.find(name);
          if (it != layer_info->map.end())
              return it->second;
-@@ -301,6 +351,17 @@ namespace {
+@@ -301,8 +353,42 @@ namespace {
  
              // create swapchain
              VkSwapchainCreateInfoKHR newInfo = *info;
@@ -122,8 +152,33 @@ index 822acdf..4a2cba2 100644
 +            std::fprintf(stderr,"[output-timing] surface timing=%u ids=%u stages=%u abs=%u relative=%u flags=%u\n",timing.presentTimingSupported,ids.presentId2Supported,timing.presentStageQueries,timing.presentAtAbsoluteTimeSupported,timing.presentAtRelativeTimeSupported,newInfo.flags);
              layer_info->root.modifySwapchainCreateInfo(it->second, newInfo,
                  [=, newInfo = &newInfo]() {
++                    if (const char* mode = std::getenv("LSFGVK_SAROS_MAILBOX");
++                        mode && std::strcmp(mode, "1") == 0 && newInfo->imageExtent.width == 2560 && newInfo->imageExtent.height == 1440) {
++                        const auto getModes = reinterpret_cast<PFN_vkGetPhysicalDeviceSurfacePresentModesKHR>(
++                            layer_info->GetInstanceProcAddr(it->second.inst(), "vkGetPhysicalDeviceSurfacePresentModesKHR"));
++                        uint32_t count = 0;
++                        bool allowed = false;
++                        if (getModes && getModes(it->second.physdev(), newInfo->surface, &count, nullptr) == VK_SUCCESS && count) {
++                            std::vector<VkPresentModeKHR> modes(count);
++                            if (getModes(it->second.physdev(), newInfo->surface, &count, modes.data()) == VK_SUCCESS) {
++                                modes.resize(count);
++                                allowed = std::find(modes.begin(), modes.end(), VK_PRESENT_MODE_MAILBOX_KHR) != modes.end();
++                            }
++                        }
++                        for (auto* next = static_cast<const VkBaseInStructure*>(newInfo->pNext); allowed && next; next = next->pNext) {
++                            if (next->sType == VK_STRUCTURE_TYPE_SWAPCHAIN_PRESENT_MODES_CREATE_INFO_EXT) {
++                                const auto* list = reinterpret_cast<const VkSwapchainPresentModesCreateInfoEXT*>(next);
++                                const auto* end = list->pPresentModes + list->presentModeCount;
++                                allowed = std::find(list->pPresentModes, end, VK_PRESENT_MODE_MAILBOX_KHR) != end;
++                            }
++                        }
++                        if (allowed) newInfo->presentMode = VK_PRESENT_MODE_MAILBOX_KHR;
++                        std::fprintf(stderr, "[optical-wsi-mode] mailbox=%d selected=%u\n", int(allowed), unsigned(newInfo->presentMode));
++                    }
                      auto res = it->second.df().CreateSwapchainKHR(
-@@ -323,12 +384,32 @@ namespace {
+                         device, newInfo, alloc, swapchain);
+                     if (res != VK_SUCCESS)
+@@ -323,12 +409,33 @@ namespace {
              if (res != VK_SUCCESS)
                  throw ls::vulkan_error(res, "vkGetSwapchainImagesKHR() failed");
  
@@ -153,11 +208,12 @@ index 822acdf..4a2cba2 100644
 +                .display_timing = (newInfo.flags & VK_SWAPCHAIN_CREATE_PRESENT_TIMING_BIT_EXT)!=0,
 +                .relative_timing = instance_info->relativeTiming.at(device) && timing.presentAtRelativeTimeSupported,
 +                .paced = pacer,
-+                .retainedImages = retained
++                .retainedImages = retained,
++                .deferred = pacer && retained >= 2 && familyQueue->second.first == it->second.commandFamily() && std::getenv("LSFGVK_SAROS_OUTPUT_RING") != nullptr
              }).first->second;
  
              // create lsfg-vk swapchain
-@@ -422,6 +503,28 @@ namespace {
+@@ -422,6 +529,30 @@ namespace {
  #pragma clang diagnostic pop
      }
  
@@ -172,6 +228,8 @@ index 822acdf..4a2cba2 100644
 +        if(swap!=instance_info->swapchainInfos.end() && swap->second.paced) {
 +            // Original images are acquired by the game after all images of the previous
 +            // group have been released to WSI. Rendering can proceed on its own queue.
++            if (swap->second.deferred)
++                return swap->second.paced->acquire(chain,timeout,semaphore,fence,index);
 +            swap->second.paced->drain(false);
 +        }
 +        auto acquire=reinterpret_cast<PFN_vkAcquireNextImageKHR>(instance_info->funcs.GetDeviceProcAddr(device,"vkAcquireNextImageKHR"));
@@ -186,7 +244,7 @@ index 822acdf..4a2cba2 100644
      void myvkDestroySwapchainKHR(
              VkDevice device,
              VkSwapchainKHR swapchain,
-@@ -470,6 +573,8 @@ VkResult vkNegotiateLoaderLayerInterfaceVersion(VkNegotiateLayerInterface* pVers
+@@ -470,6 +601,8 @@ VkResult vkNegotiateLoaderLayerInterfaceVersion(VkNegotiateLayerInterface* pVers
  #define VKPTR(name) reinterpret_cast<PFN_vkVoidFunction>(name)
                  { "vkCreateInstance", VKPTR(myvkCreateInstance) },
                  { "vkCreateDevice", VKPTR(myvkCreateDevice) },
@@ -385,10 +443,10 @@ index 0000000..41d9e4f
 +}
 diff --git a/lsfg-vk-layer/src/paced-queue.hpp b/lsfg-vk-layer/src/paced-queue.hpp
 new file mode 100644
-index 0000000..3ca7980
+index 0000000..007eabe
 --- /dev/null
 +++ b/lsfg-vk-layer/src/paced-queue.hpp
-@@ -0,0 +1,162 @@
+@@ -0,0 +1,200 @@
 +/* SPDX-License-Identifier: GPL-3.0-or-later */
 +#pragma once
 +
@@ -403,6 +461,14 @@ index 0000000..3ca7980
 +namespace lsfgvk::layer {
 +using PresentWitness = void (*)(VkSwapchainKHR, uint64_t, int, uint32_t, VkExtent2D);
 +
++// Recorded on the producer before publication. The consumer only submits these commands.
++struct DeferredCopy {
++    VkSemaphore acquired;
++    VkSemaphore recycled;
++    std::vector<VkCommandBuffer> commands;
++    std::vector<VkSemaphore> presentReady;
++};
++
 +struct PendingImage {
 +    std::shared_ptr<OutputTiming> timing;
 +    VkSwapchainKHR chain;
@@ -415,6 +481,8 @@ index 0000000..3ca7980
 +    PresentWitness witness;
 +    VkSemaphore gpuProgress;
 +    uint64_t requiredValue;
++    const DeferredCopy* copy = nullptr;
++    uint64_t recycleValue = 0;
 +};
 +
 +class PacedQueue {
@@ -454,6 +522,33 @@ index 0000000..3ca7980
 +        deadline += frequency / rate;
 +    }
 +
++    VkResult prepareDeferred(PendingImage& image) {
++        const auto& copy = *image.copy;
++        auto acquired = acquire(image.chain, 2000000000ULL, copy.acquired, VK_NULL_HANDLE, &image.image);
++        if (acquired != VK_SUCCESS && acquired != VK_SUBOPTIMAL_KHR) return acquired;
++        image.ready = copy.presentReady.at(image.image);
++        const VkSemaphore waits[]{copy.acquired, image.gpuProgress};
++        const uint64_t waitValues[]{0, image.requiredValue};
++        const VkPipelineStageFlags stages[]{VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT};
++        const VkSemaphore signals[]{image.ready, copy.recycled};
++        const uint64_t signalValues[]{0, image.recycleValue};
++        VkTimelineSemaphoreSubmitInfo timeline{VK_STRUCTURE_TYPE_TIMELINE_SEMAPHORE_SUBMIT_INFO};
++        timeline.waitSemaphoreValueCount = 2;
++        timeline.pWaitSemaphoreValues = waitValues;
++        timeline.signalSemaphoreValueCount = 2;
++        timeline.pSignalSemaphoreValues = signalValues;
++        VkSubmitInfo submit{VK_STRUCTURE_TYPE_SUBMIT_INFO};
++        submit.pNext = &timeline;
++        submit.waitSemaphoreCount = 2;
++        submit.pWaitSemaphores = waits;
++        submit.pWaitDstStageMask = stages;
++        submit.commandBufferCount = 1;
++        submit.pCommandBuffers = &copy.commands.at(image.image);
++        submit.signalSemaphoreCount = 2;
++        submit.pSignalSemaphores = signals;
++        return vk.df().QueueSubmit(queue, 1, &submit, VK_NULL_HANDLE);
++    }
++
 +    void run() {
 +        SetThreadDescription(GetCurrentThread(), L"Saros optical present");
 +        SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_ABOVE_NORMAL);
@@ -461,7 +556,7 @@ index 0000000..3ca7980
 +            std::unique_lock lock(mutex);
 +            changed.wait(lock, [this] { return stopping || !images.empty(); });
 +            if (images.empty()) return;
-+            const auto image = std::move(images.front());
++            auto image = std::move(images.front());
 +            images.pop_front();
 +            busy = true;
 +            lock.unlock();
@@ -470,8 +565,9 @@ index 0000000..3ca7980
 +            wait.pSemaphores=&image.gpuProgress;
 +            wait.pValues=&image.requiredValue;
 +            // A binary semaphore remains in the WSI request for Vulkan's memory dependency.
-+            const auto ready=vk.df().WaitSemaphoresKHR(vk.dev(),&wait,UINT64_MAX);
++            auto ready=vk.df().WaitSemaphoresKHR(vk.dev(),&wait,UINT64_MAX);
 +            if (ready==VK_SUCCESS) pace();
++            if (ready==VK_SUCCESS && image.copy) ready = prepareDeferred(image);
 +            VkPresentInfoKHR present{VK_STRUCTURE_TYPE_PRESENT_INFO_KHR};
 +            present.swapchainCount = 1;
 +            present.pSwapchains = &image.chain;
@@ -552,7 +648,7 @@ index 0000000..3ca7980
 +}
 +
 diff --git a/lsfg-vk-layer/src/swapchain.cpp b/lsfg-vk-layer/src/swapchain.cpp
-index 8234119..c3f08d0 100644
+index 8234119..1788433 100644
 --- a/lsfg-vk-layer/src/swapchain.cpp
 +++ b/lsfg-vk-layer/src/swapchain.cpp
 @@ -24,7 +24,36 @@
@@ -592,7 +688,7 @@ index 8234119..c3f08d0 100644
      VkImageMemoryBarrier barrierHelper(VkImage handle,
              VkAccessFlags srcAccessMask,
              VkAccessFlags dstAccessMask,
-@@ -123,6 +152,11 @@ Swapchain::Swapchain(const vk::Vulkan& vk, backend::Instance& backend,
+@@ -123,6 +152,46 @@ Swapchain::Swapchain(const vk::Vulkan& vk, backend::Instance& backend,
          });
      }
  
@@ -601,10 +697,45 @@ index 8234119..c3f08d0 100644
 +        imageReady.reserve(this->info.images.size());
 +        for (size_t n=0; n<this->info.images.size(); ++n) imageReady.emplace_back(vk);
 +    }
++    if (this->info.deferred) {
++        slotComplete.emplace(vk, 0);
++        const auto copyImage = reinterpret_cast<PFN_vkCmdCopyImage>(vk.fi().GetDeviceProcAddr(vk.dev(), "vkCmdCopyImage"));
++        if (!copyImage) throw ls::error("deferred output requires vkCmdCopyImage");
++        const size_t count = 2 * this->destinationImages.size() + 2;
++        outputSlots.reserve(count);
++        for (size_t n = 0; n < count; ++n) {
++            auto& slot = outputSlots.emplace_back(OutputSlot{
++                vk::Image(vk,extent,this->info.format,VK_IMAGE_USAGE_TRANSFER_SRC_BIT|VK_IMAGE_USAGE_TRANSFER_DST_BIT|VK_IMAGE_USAGE_SAMPLED_BIT),
++                vk::Semaphore(vk)});
++            slot.copy.acquired = slot.acquired.handle();
++            slot.copy.recycled = slotComplete->handle();
++            for (size_t j = 0; j < this->info.images.size(); ++j) {
++                auto& command = slot.commands.emplace_back(vk);
++                const auto raw = command.handle();
++                VkCommandBufferBeginInfo begin{VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO};
++                auto result = vk.df().BeginCommandBuffer(raw,&begin);
++                if (result != VK_SUCCESS) throw ls::vulkan_error(result,"recording deferred image copy failed");
++                auto realImage = this->info.images[j];
++                auto enter = barrierHelper(realImage,0,VK_ACCESS_TRANSFER_WRITE_BIT,VK_IMAGE_LAYOUT_UNDEFINED,VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
++                vk.df().CmdPipelineBarrier(raw,VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,VK_PIPELINE_STAGE_TRANSFER_BIT,0,0,nullptr,0,nullptr,1,&enter);
++                VkImageCopy region{};
++                region.srcSubresource = {VK_IMAGE_ASPECT_COLOR_BIT,0,0,1};
++                region.dstSubresource = region.srcSubresource;
++                region.extent = {extent.width,extent.height,1};
++                copyImage(raw,slot.image.handle(),VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,realImage,VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,1,&region);
++                auto leave = barrierHelper(realImage,VK_ACCESS_TRANSFER_WRITE_BIT,0,VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
++                vk.df().CmdPipelineBarrier(raw,VK_PIPELINE_STAGE_TRANSFER_BIT,VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,0,0,nullptr,0,nullptr,1,&leave);
++                command.end(vk);
++                slot.copy.commands.push_back(raw);
++                slot.copy.presentReady.push_back(imageReady[j].handle());
++            }
++        }
++        std::fprintf(stderr,"[optical-deferred] private=%zu real=%zu group=%u\\n",count,this->info.images.size(),unsigned(this->profile.multiplier));
++    }
      const size_t frames = std::max(this->info.images.size(), this->destinationImages.size() + 2);
      for (size_t i = 0; i < frames; i++) {
          this->postCopySemaphores.emplace_back(
-@@ -139,6 +173,18 @@ VkResult Swapchain::present(const vk::Vulkan& vk,
+@@ -139,6 +208,18 @@ VkResult Swapchain::present(const vk::Vulkan& vk,
      const auto& swapchainImage = this->info.images.at(imageIdx);
      const auto& sourceImage = this->sourceImages.at(this->fidx % 2);
  
@@ -623,8 +754,50 @@ index 8234119..c3f08d0 100644
      // schedule frame generation
      try {
          this->instance.get().scheduleFrames(this->ctx.get());
-@@ -213,7 +259,7 @@ VkResult Swapchain::present(const vk::Vulkan& vk,
+@@ -155,8 +236,7 @@ VkResult Swapchain::present(const vk::Vulkan& vk,
+         while (info) {
+             if (info->sType == VK_STRUCTURE_TYPE_SWAPCHAIN_PRESENT_MODE_INFO_EXT) {
+                 for (size_t i = 0; i < info->swapchainCount; i++)
+-                    const_cast<VkPresentModeKHR*>(info->pPresentModes)[i] =
+-                        VK_PRESENT_MODE_FIFO_KHR;
++                    const_cast<VkPresentModeKHR*>(info->pPresentModes)[i] = this->info.presentMode;
+             }
  
+             info = reinterpret_cast<VkSwapchainPresentModeInfoEXT*>(const_cast<void*>(info->pNext));
+@@ -211,9 +291,39 @@ VkResult Swapchain::present(const vk::Vulkan& vk,
+         auto& destinationImage = this->destinationImages.at(i);
+         auto& pass = this->passes.at(i);
+ 
++        if (paced && !outputSlots.empty()) {
++            auto& slot = outputSlots.at(nextSlot % outputSlots.size());
++            if (slot.lastUse) {
++                const auto handle = slotComplete->handle();
++                VkSemaphoreWaitInfo wait{VK_STRUCTURE_TYPE_SEMAPHORE_WAIT_INFO};
++                wait.semaphoreCount=1; wait.pSemaphores=&handle; wait.pValues=&slot.lastUse;
++                auto result=vk.df().WaitSemaphoresKHR(vk.dev(),&wait,3000000000ULL);
++                if (result!=VK_SUCCESS) throw ls::vulkan_error(result,"recycling private output timed out");
++            }
++            auto& command = pass.commandBuffer;
++            command.begin(vk);
++            command.blitImage(vk,{
++                    barrierHelper(destinationImage.handle(),0,VK_ACCESS_TRANSFER_READ_BIT,VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL),
++                    barrierHelper(slot.image.handle(),0,VK_ACCESS_TRANSFER_WRITE_BIT,VK_IMAGE_LAYOUT_UNDEFINED,VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL)
++                },{destinationImage.handle(),slot.image.handle()},this->info.extent,{
++                    barrierHelper(slot.image.handle(),VK_ACCESS_TRANSFER_WRITE_BIT,0,VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL)
++                });
++            command.end(vk);
++            const bool last = i+1==this->destinationImages.size();
++            std::vector<VkSemaphore> waits;
++            if (i) waits.push_back(this->postCopySemaphores.at((this->idx-1)%this->postCopySemaphores.size()).second.handle());
++            std::vector<VkSemaphore> signals{last ? imageReady.at(imageIdx).handle() : pcs.second.handle()};
++            command.submit(vk,waits,this->syncSemaphore->handle(),this->idx,signals,outputComplete->handle(),++completedPass,last ? this->renderFence->handle() : VK_NULL_HANDLE);
++            slot.lastUse = ++nextSlot;
++            auto result = this->info.paced->submit({outputTiming,swapchain,VK_NULL_HANDLE,0,this->fidx,static_cast<int>(i),
++                this->info.extent,this->info.display_timing,OpticalPresentSample,outputComplete->handle(),completedPass,&slot.copy,slot.lastUse});
++            if (result!=VK_SUCCESS && result!=VK_SUBOPTIMAL_KHR) throw ls::vulkan_error(result,"scheduling private output failed");
++            this->idx++;
++            continue;
++        }
          // acquire swapchain image
          uint32_t aqImageIdx{};
 -        auto res = vk.df().AcquireNextImageKHR(vk.dev(), swapchain,
@@ -632,7 +805,7 @@ index 8234119..c3f08d0 100644
              UINT64_MAX, pass.acquireSemaphore.handle(),
              VK_NULL_HANDLE,
              &aqImageIdx
-@@ -261,14 +307,14 @@ VkResult Swapchain::present(const vk::Vulkan& vk,
+@@ -261,14 +371,14 @@ VkResult Swapchain::present(const vk::Vulkan& vk,
          }
  
          const std::vector<VkSemaphore> signalSemaphores{
@@ -650,7 +823,7 @@ index 8234119..c3f08d0 100644
              i == this->destinationImages.size() - 1 ? this->renderFence->handle() : VK_NULL_HANDLE
          );
  
-@@ -277,16 +323,16 @@ VkResult Swapchain::present(const vk::Vulkan& vk,
+@@ -277,16 +387,16 @@ VkResult Swapchain::present(const vk::Vulkan& vk,
              .sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
              .pNext = i ? nullptr : next_chain,
              .waitSemaphoreCount = 1,
@@ -670,7 +843,7 @@ index 8234119..c3f08d0 100644
          this->idx++;
      }
  
-@@ -295,15 +341,20 @@ VkResult Swapchain::present(const vk::Vulkan& vk,
+@@ -295,15 +405,20 @@ VkResult Swapchain::present(const vk::Vulkan& vk,
      const VkPresentInfoKHR presentInfo{
          .sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
          .waitSemaphoreCount = 1,
@@ -687,14 +860,14 @@ index 8234119..c3f08d0 100644
  
 +
 +    if(paced) {
-+        auto released=this->info.paced->waitForRoom(info.retainedImages);
++        auto released=this->info.paced->waitForRoom(outputSlots.empty() ? info.retainedImages : this->destinationImages.size()+2);
 +        if(res==VK_SUCCESS) res=released;
 +    }
      this->fidx++;
      return res;
  }
 diff --git a/lsfg-vk-layer/src/swapchain.hpp b/lsfg-vk-layer/src/swapchain.hpp
-index 3c711a0..ac16ead 100644
+index 3c711a0..c0bf2bd 100644
 --- a/lsfg-vk-layer/src/swapchain.hpp
 +++ b/lsfg-vk-layer/src/swapchain.hpp
 @@ -12,6 +12,7 @@
@@ -705,7 +878,7 @@ index 3c711a0..ac16ead 100644
  #include <cstdint>
  #include <utility>
  #include <vector>
-@@ -27,6 +28,10 @@ namespace lsfgvk::layer {
+@@ -27,6 +28,11 @@ namespace lsfgvk::layer {
          VkColorSpaceKHR colorSpace;
          VkExtent2D extent;
          VkPresentModeKHR presentMode;
@@ -713,22 +886,33 @@ index 3c711a0..ac16ead 100644
 +        bool relative_timing{false};
 +        std::shared_ptr<PacedQueue> paced;
 +        size_t retainedImages{};
++        bool deferred = false;
      };
  
      /// modify the swapchain create info based on the profile pre-swapchain creation
-@@ -58,7 +63,11 @@ namespace lsfgvk::layer {
+@@ -58,7 +64,21 @@ namespace lsfgvk::layer {
              VkQueue queue, VkSwapchainKHR swapchain,
              void* next_chain, uint32_t imageIdx,
              const std::vector<VkSemaphore>& semaphores);
 +        void drain() { if (info.paced) info.paced->drain(); }
      private:
++        struct OutputSlot {
++            vk::Image image;
++            vk::Semaphore acquired;
++            std::vector<vk::CommandBuffer> commands;
++            DeferredCopy copy{};
++            uint64_t lastUse{};
++        };
++        std::vector<OutputSlot> outputSlots;
++        ls::lazy<vk::TimelineSemaphore> slotComplete;
++        uint64_t nextSlot = 0;
 +        std::vector<vk::Semaphore> imageReady;
 +        ls::lazy<vk::TimelineSemaphore> outputComplete;
 +        uint64_t completedPass = 0;
          std::vector<vk::Image> sourceImages;
          std::vector<vk::Image> destinationImages;
          ls::lazy<vk::TimelineSemaphore> syncSemaphore;
-@@ -75,6 +84,7 @@ namespace lsfgvk::layer {
+@@ -75,6 +95,7 @@ namespace lsfgvk::layer {
          ls::R<backend::Instance> instance;
          ls::owned_ptr<ls::R<backend::Context>> ctx;
          size_t idx{1};

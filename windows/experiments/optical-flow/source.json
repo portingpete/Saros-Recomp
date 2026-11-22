@@ -1,9 +1,9 @@
 {
   "upstream": "https://github.com/56TR/lsfg-vk-windows",
   "revision": "b03458e44eb5cc5a87537b3743f52617974e2389",
-  "patch_sha256": "8f687d984501ab912f4bd5355d975c11037879e2905e6aa2211d9a863465269d",
-  "measured_layer_sha256": "dfdfb9775d86cf6f375d183da124071fcdbe3d1cda873d15855b4a96415884e9",
-  "separate_rebuild_sha256": "7275c8d8eb6599df73d079025e11424e474058765328b399ed29f79ade54e266",
+  "patch_sha256": "d7008b8c5eec544af52c810a25b670fb83f5e357eb7843a52fa439a99b2ed650",
+  "measured_layer_sha256": "a2abfcf142892a16226745853681c5d8564058ef445d2839a1c2c215b8c88bbb",
+  "separate_rebuild_sha256": "fc5443418dc60bcad3d2b83954cf048b837eae9a77bc4daea58581da698e3afa",
   "vulkan_headers": 335,
   "architecture": "Windows x86-64",
   "rebuild": "clean pinned checkout and Windows Release link",
@@ -11,5 +11,6 @@
   "capture_layer_sha256": "a90e2293be42df74fa5ab292654fe1284be7c4350052e84891342870cc1162d1",
   "exit_readbacks_patch_sha256": "f6672ceb639312c3e8440f7066ee042ed12ed313679cf90841209cfc93e64989",
   "measured_renderer_sha256": "b938cdd735e64cb6456fd37ba5ec62bcacddf41fc9bfab289113c3f3901a7da6",
-  "separate_renderer_rebuild_sha256": "85596975a09d65ebb7a8d792e4878b42f5afb3d54c515351a259df19f19765f3"
+  "separate_renderer_rebuild_sha256": "85596975a09d65ebb7a8d792e4878b42f5afb3d54c515351a259df19f19765f3",
+  "previous_four_pending_revision": "1d41daaf1a852186ab77e149662266b4faac2478"
 }

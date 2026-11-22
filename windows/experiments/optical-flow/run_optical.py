@@ -80,6 +80,7 @@ def main():
             VK_LAYER_PATH=prepend(env.get("VK_LAYER_PATH", ""), directory),
             VK_INSTANCE_LAYERS=prepend(env.get("VK_INSTANCE_LAYERS", ""), NAME),
             LSFGVK_CONFIG=str(config_path), LSFGVK_PROFILE=PROFILE, LSFGVK_SAROS_OUTPUT_HZ=str(args.output_hz),
+            LSFGVK_SAROS_OUTPUT_RING="1", LSFGVK_SAROS_MAILBOX="0",
         )
         cmd = [sys.executable, "-B", str(launcher), "--play", str(args.play), "--profile", "native-fxaa"]
         if args.check:
