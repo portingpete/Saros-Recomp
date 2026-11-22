@@ -1,0 +1,68 @@
+{
+  "result": "PASS installed reference, empty-save and empty-cache first boot to controllable Movement & Camera tutorial",
+  "guest_sha256": "6bd1ce70dea706e606aa49133166cd523e6317d559e71dbfa3d9e0117303f0b4",
+  "renderer_sha256": "029c42c433b69d8861df54e7450d45ae7d6acad8a5df987f2c9dffccce1c16c9",
+  "empty_initial_mutable_roots": [
+    "_sd",
+    "data",
+    "download0",
+    "temp0",
+    "shader_cache",
+    "_PipelineCache"
+  ],
+  "installed_modules_rehashed_after": 421,
+  "scene_progression": [
+    "Language and subtitles",
+    "cycle suspend notice",
+    "Arjun opening cinematic",
+    "Movement & Camera tutorial",
+    "forward, camera-right and strafe"
+  ],
+  "resolution": [
+    2560,
+    1440
+  ],
+  "input": {
+    "menu_cross_hold_seconds": 2.8,
+    "forward_save_distance_units": 5451.439,
+    "camera_only_save_distance_units": 0,
+    "strafe_save_distance_units": 1216.069
+  },
+  "live_settings": {
+    "r.AntiAliasingMethod": [
+      1,
+      1
+    ],
+    "r.FidelityFX.FI.Enabled": [
+      0,
+      0
+    ]
+  },
+  "normal_exit": 0,
+  "frames": {
+    "002-language": {
+      "frame": 1092,
+      "sha256_native_ppm": "705d0af8e8f564bc13e86a4b5c2f20caab3bf0abbcbc5b5bed444bf4e3568188"
+    },
+    "004-after-language": {
+      "frame": 2908,
+      "sha256_native_ppm": "919cd489b3488bedb79637d914bdf50b3186118a49af679ce7679cd786ba54be"
+    },
+    "010-character": {
+      "frame": 4964,
+      "sha256_native_ppm": "12b8848f4e1c162cb913fe38b69590a9aee7d55bdc695f02258e98f858e13173"
+    },
+    "014-forward-motion": {
+      "frame": 5960,
+      "sha256_native_ppm": "431b81dca59921cb8a951a9a2144405446a172124961ae58e725d985e6f42bf6"
+    },
+    "016-camera-result": {
+      "frame": 6384,
+      "sha256_native_ppm": "6e2e351fd11e6e450a9806fda65a743f11670ee4033ce14c3ada208712fb9cd8"
+    },
+    "018-strafe-result": {
+      "frame": 7120,
+      "sha256_native_ppm": "bb4160b4ba9386d44b657b6a001ddd3fa0249746e22cdd9a5c64b2983249af7c"
+    }
+  }
+}

@@ -8,18 +8,18 @@ This project tracks a Windows recompile using [AnyPS5](https://github.com/boykop
 
 ## Run the native 1440p release
 
-The Windows kit includes the launcher, renderer build patches, profile generators and benchmark evidence for Saros PPSA07631 version 01.000.000. It works with an assembled AnyPS5 Windows installation and your own playable prologue checkpoint. [Download the native 1440p release](https://github.com/portingpete/Saros-Recomp/releases/tag/v0.1.0-native-1440p)
+The Windows kit includes the launcher, renderer build patches, profile generators and benchmark evidence for Saros PPSA07631 version 01.000.000. It works with the assembled native AnyPS5 Windows installation and supports starting a new game. [Download the native 1440p release](https://github.com/portingpete/Saros-Recomp/releases/tag/v0.1.0-native-1440p)
 
 The benchmark renderer averaged **41.02 FPS**, then **38.51 FPS** on a repeat. The independently built renderer averaged **39.76 FPS** with a warm cache. All three results cover the same two moving prologue routes at 2560 × 1440, 100% internal scale, with FXAA enabled and frame generation disabled. [Route timings and renderer hashes](windows/experiments/native-uploads/measurements.json)
 
-Install Python 3.11 or newer and pywin32. Extract the kit to its own folder. Run these commands there, substituting the path to the installation containing your `Saros.exe` and `libs` folder. The first command checks the launch inputs. The second skips startup movies and loads your existing progression.
+Install Python 3.11 or newer and pywin32. Extract the kit to its own folder. Run these commands there, substituting the path to the installation containing your `Saros.exe` and `libs` folder. The first command checks the launch inputs. The second skips startup movies and starts the game.
 
 ```powershell
 .\Run-Saros-Native-1440p.cmd --play "D:\Saros-Windows" --check
 .\Run-Saros-Native-1440p.cmd --play "D:\Saros-Windows"
 ```
 
-To assemble the guest and renderer, generate the title-specific files locally from your own installation. The renderer build uses an original shader module from a matching local shader cache. The [host file manifest](windows/native-host-sha256.json) identifies all 419 libraries in the tested install. Gameplay was verified from a saved prologue checkpoint. In a separate fresh-save test, the game wrote a save and then encountered Vulkan device loss before player control. [Guest build](windows/README.md) · [Native renderer, overlays and gameplay evidence](windows/experiments/native-uploads/README.md)
+To assemble the guest and renderer, generate the title-specific files locally from your own installation. The renderer build uses an original shader module from a matching local shader cache. The [host file manifest](windows/native-host-sha256.json) identifies all 419 libraries in the tested install. Terra also started the installed native renderer with empty save and shader-cache folders, held Cross for about three seconds on each first-run prompt, then walked, turned the camera and strafed in the Movement & Camera tutorial. [Fresh-start evidence](windows/experiments/native-uploads/fresh-start.json) [Guest build](windows/README.md) · [Native renderer, overlays and gameplay evidence](windows/experiments/native-uploads/README.md)
 
 ## Other rendering experiments
 
