@@ -411,5 +411,9 @@
       "positive_stage_reports": 3257
     }
   ],
-  "scope": "Each route covers 30 seconds of simultaneous character movement and camera rotation from the prologue checkpoint on an isolated Windows desktop. Scanout counts distinct positive timestamps at VK_PRESENT_STAGE_IMAGE_FIRST_PIXEL_OUT_BIT_EXT. The visible-pixel stage was unavailable."
+  "scope": "Each route covers 30 seconds of simultaneous character movement and camera rotation from the prologue checkpoint on an isolated Windows desktop. Scanout counts distinct positive timestamps at VK_PRESENT_STAGE_IMAGE_FIRST_PIXEL_OUT_BIT_EXT. The visible-pixel stage was unavailable.",
+  "clock_domains": {
+    "return_ns": "Host QPC in ns from the first guest flip of each route",
+    "first_pixel_out_ns": "Vulkan PRESENT_STAGE_LOCAL_EXT in ns from the earliest positive stage report in this route. Present IDs select the cohort by the QPC return timestamp. The two clock origins are independent."
+  }
 }
