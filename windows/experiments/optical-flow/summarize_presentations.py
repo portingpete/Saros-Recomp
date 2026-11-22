@@ -37,6 +37,9 @@ def main():
             raise ValueError(f"Published totals disagree for {key}")
         if round(distinct / duration_s, 3) != route["scanout_fps"]:
             raise ValueError(f"Published rate disagrees for {key}")
+        if (separated != route["refresh_separated_timestamps"]
+                or round(separated / duration_s, 3) != route["refresh_separated_fps"]):
+            raise ValueError(f"Published refresh separation disagrees for {key}")
         label = " / ".join(key)
         print(f"{label:<38} {len(reports):>6}   {distinct/duration_s:>10.3f}   {separated/duration_s:>19.3f}")
     if samples:

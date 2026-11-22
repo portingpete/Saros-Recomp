@@ -22,6 +22,12 @@ The Windows optical-flow build delivered **122.04 and 123.15 driver-reported sca
 | Deferred acquisition at 240 Hz | Wide turn | 26.44 | 211.59 | 114.04 | 5.56 ms | 19.45 ms |
 | Repeat at 180 Hz | Tight turn | 29.98 | 179.83 | 114.79 | 8.33 ms | 16.67 ms |
 | Repeat at 180 Hz | Wide turn | 29.03 | 174.19 | 109.74 | 8.33 ms | 19.45 ms |
+| Independent rebuild at 180 Hz | Tight turn | 29.97 | 179.85 | 114.90 | 8.33 ms | 16.67 ms |
+| Independent rebuild at 180 Hz | Wide turn | 27.97 | 168.04 | 105.74 | 8.33 ms | 19.45 ms |
+| Sixfold output at 200 Hz | Tight turn | 32.85 | 197.22 | 114.00 | 8.33 ms | 19.45 ms |
+| Sixfold output at 200 Hz | Wide turn | 29.73 | 178.50 | 101.78 | 8.33 ms | 22.22 ms |
+
+The independently rebuilt renderer and optical layer reached the same checkpoint, completed both movement routes and exited cleanly. The matching shader cache loaded 559 programs, 706 modules and 528 pipelines. Their refresh-separated rates were 114.90 and 105.71 scanouts/s. Raising the target to 216 Hz timed out while recycling a private output image during the tight turn. The launcher uses 180 Hz. [Build identities](source.json)
 
 The graphics queue writes each generated image into one of twelve private 1440p images. A second queue acquires a display image when its presentation time arrives, copies the ready image into it and submits it for presentation. A GPU semaphore protects each private image until its copy finishes. At a target of 180 Hz, this raised the two-route mean from 109.29 to 122.60 scanouts/s. Eightfold generation at 240 Hz reached 128.95 on the tight turn and 114.04 on the wide turn. [Measurements](measurements.json)
 
@@ -29,7 +35,7 @@ The capture layer copies images on the queue that presents them. Both deferred-a
 
 The host was a Core i9-14900K with a GeForce RTX 5080, driver 617.14 and a 360 Hz monitor. The game rendered at 100% scale with FXAA and its own frame interpolation disabled. A separate Vulkan layer ran optical flow at a scale of 0.75. The Windows client and Vulkan images measured 2560 × 1440 on an isolated desktop. The engine rate comes from Unreal's frame counter. The Vulkan rate counts successful presentation calls. The scanout rate counts distinct positive first-pixel-out timestamps reported by the driver. That stage tracks transmission to display hardware. The driver did not expose first-pixel-visible timing. [Vulkan stage definitions](https://docs.vulkan.org/refpages/latest/refpages/source/VkPresentStageFlagBitsEXT.html)
 
-The compressed CSV contains all 79,968 successful presents from eighteen route windows. Present IDs select submissions that returned during movement. Return times use host QPC nanoseconds from the first guest flip. Scanout times use Vulkan stage-local nanoseconds from the earliest positive report in the same route. A numeric zero marks this origin. An empty cell denotes a complete report without a positive timestamp. Original images have index −1. [Per-present evidence](per-present.csv.gz)
+The compressed CSV contains all 101,695 successful presents from twenty-two route windows. Present IDs select submissions that returned during movement. Return times use host QPC nanoseconds from the first guest flip. Scanout times use Vulkan stage-local nanoseconds from the earliest positive report in the same route. A numeric zero marks this origin. An empty cell denotes a complete report without a positive timestamp. Original images have index −1. [Per-present evidence](per-present.csv.gz)
 
 On both sixfold deferred-acquisition routes, every distinct scanout timestamp was at least half a 360 Hz refresh apart. The conservative count gives the same 122.04 and 123.15 scanouts/s. Applying that filter to the eightfold trial gives 128.92 and 113.97. The verification script reproduces each rate from the per-present evidence. [Measurement script](summarize_presentations.py)
 
