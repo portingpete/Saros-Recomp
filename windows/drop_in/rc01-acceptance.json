@@ -1,0 +1,90 @@
+{
+  "status": "PASS private RC01 first-launch keyboard gameplay acceptance",
+  "release_scope": "Private integration only. Reference VideoOut. Renderer license review remains open; final release bytes require a separate acceptance.",
+  "package_sha256": "41e7aec796e8d48d78d9dbd918a66ccc4bd0fe734ddbcb1ebf5f1075d045d0df",
+  "renderer_sha256": "2bd587f98530ff5c2d01f97c9b46f82e4f1f79922b41693741ab5d391b2a4615",
+  "videoout_sha256": "b031582659007467604cd7243ea7b24af14e31075ece2931db4a205a8fc0017a",
+  "guest_sha256": "6bd1ce70dea706e606aa49133166cd523e6317d559e71dbfa3d9e0117303f0b4",
+  "input": "Win32 key messages sent only to owned game HWND; shipped mapping; no game input environment hook, hardware controller not exercised. External Vulkan capture layer observed real presents.",
+  "cache_at_boot": [
+    "Vulkan pipeline cache: initialized empty",
+    "Shader cache: loaded 0 programs, 0 modules, 0 pipelines in 0 ms"
+  ],
+  "native_scale": [
+    "[saros-native-scale] frame=1 min=100 max=100 output=2560x1440",
+    "[mouse] video driver windows: guest 2560x1440 presented at 2560x1440, delta scale 1.0000 x 1.0000"
+  ],
+  "setup": {
+    "entry": "Play Saros.exe",
+    "source": "local decrypted PPSA07631 v01.000.000 folder",
+    "guest_images_verified": 41,
+    "host_files_verified": 419,
+    "imported_state": false
+  },
+  "images": {
+    "001-first-menu": {
+      "frame": 504,
+      "drawable": [
+        2560,
+        1440
+      ],
+      "source_sha256": "705d0af8e8f564bc13e86a4b5c2f20caab3bf0abbcbc5b5bed444bf4e3568188"
+    },
+    "003-after-enter": {
+      "frame": 2048,
+      "drawable": [
+        2560,
+        1440
+      ],
+      "source_sha256": "919cd489b3488bedb79637d914bdf50b3186118a49af679ce7679cd786ba54be"
+    },
+    "009-after-walk": {
+      "frame": 5892,
+      "drawable": [
+        2560,
+        1440
+      ],
+      "source_sha256": "7f8d80b73dfccd882d5f51c5081916ca240c882b9f286775b2d8ed9ca43fcf2b"
+    },
+    "011-before-walk": {
+      "frame": 7140,
+      "drawable": [
+        2560,
+        1440
+      ],
+      "source_sha256": "9c9d589ad7b0a4b2f5f24aa6c1e32c417939d51fca11df1fb8c2cd024ecc233c"
+    },
+    "013-walk-result": {
+      "frame": 7520,
+      "drawable": [
+        2560,
+        1440
+      ],
+      "source_sha256": "804a72fd479775af44b4bf6aaf9554a8f733ee538388613409e8dca5147edf21"
+    },
+    "015-camera-result": {
+      "frame": 7792,
+      "drawable": [
+        2560,
+        1440
+      ],
+      "source_sha256": "11354ed4b4d4cd96831d7941e959233064c0212c652e3f2c443b96b7d466b972"
+    },
+    "017-strafe-result": {
+      "frame": 8208,
+      "drawable": [
+        2560,
+        1440
+      ],
+      "source_sha256": "4c3ca5134a8fa1c0c820abee71eaae69682dfd2285db0feb9f1710fdf9439f66"
+    }
+  },
+  "save_movement_world_units": {
+    "forward_snapshots": 3469.473,
+    "standing_after_forward_to_after_strafe": 536.816
+  },
+  "exit": {
+    "game": 0,
+    "launcher": 0
+  }
+}

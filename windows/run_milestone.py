@@ -47,14 +47,16 @@ def settings(text, groups=GROUPS, video=VIDEO):
     return "\n".join(lines) + "\n"
 
 
+UPLOADS = {"native-upload-scatter": "0", "native-upload-copies": "1"}
+PROFILES = {**dict.fromkeys(UPLOADS, "SarosNativeFXAA"), "native-fxaa": "SarosNativeFXAA", "interpolation": "SarosInterpolated",
+                "retail-interpolation": "SarosRetailInterpolation"}
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--play", type=Path, required=True, help="Installation containing Saros.exe, libs and app0")
     parser.add_argument("--check", action="store_true", help="Verify the launch inputs and exit")
-    uploads = {"native-upload-scatter": "0", "native-upload-copies": "1"}
-    profiles = {**dict.fromkeys(uploads, "SarosNativeFXAA"), "native-fxaa": "SarosNativeFXAA", "interpolation": "SarosInterpolated",
-                "retail-interpolation": "SarosRetailInterpolation"}
-    parser.add_argument("--profile", choices=profiles, help="Use a profile from the optional presentation experiment")
+    parser.add_argument("--profile", choices=PROFILES, help="Use a profile from the optional presentation experiment")
     args = parser.parse_args()
     play = args.play.resolve(strict=True)
     expected = json.loads((HERE / "guest-files.json").read_text(encoding="utf-8"))
@@ -71,44 +73,54 @@ def main():
                  "app0/uecommandline.txt", "app0/guest/content/paks/pakchunk0-ps5.pak"):
         if not (play / name).is_file():
             parser.error(f"Missing installation file {name}")
+    if args.profile:
+        with (play / "libs/kyty_gpu.prx").open("rb") as stream, mmap.mmap(stream.fileno(), 0, access=mmap.ACCESS_READ) as image:
+            if image.find(b"[rgba16s-storage]") == -1:
+                parser.error("Install the renderer built with the presentation experiment patch")
+            if args.profile in UPLOADS and image.find(b"[transfer-batches]") == -1:
+                parser.error("Install the renderer built with the native upload patch")
+    if args.check:
+        print("Verified the guest images, native display profile and required launch paths.")
+        return 0
+    return launch(play, args.profile)
+
+
+def launch(play, profile, *, env_overrides=None, display_mode="windowed", output=None):
     directory = play / GUEST_CONFIG.lstrip("/")
     original = directory / "gameusersettings.ini"
     groups = GROUPS.copy()
     video = VIDEO.copy()
-    if args.profile:
-        from experiments.interpolation.windowed_client import run_windowed
-        with (play / "libs/kyty_gpu.prx").open("rb") as stream, mmap.mmap(stream.fileno(), 0, access=mmap.ACCESS_READ) as image:
-            if image.find(b"[rgba16s-storage]") == -1:
-                parser.error("Install the renderer built with the presentation experiment patch")
-            if args.profile in uploads and image.find(b"[transfer-batches]") == -1:
-                parser.error("Install the renderer built with the native upload patch")
+    if profile:
         for group in ("Shadow", "GlobalIllumination", "Reflection", "Effects"):
             groups[f"sg.{group}Quality"] = "0"
         video["bUseVSync"] = "False"
     text = settings(original.read_text(encoding="utf-8-sig") if original.exists() else "", groups, video)
-    if args.check:
-        print("Verified the guest images, native display profile and required launch paths.")
-        return 0
     directory.mkdir(parents=True, exist_ok=True)
     env = {k: v for k, v in os.environ.items() if not k.upper().startswith(("ANYPS5_", "APS5_", "KYTY_", "SAROS_"))}
     env.update(json.loads((HERE / "30fps-environment.json").read_text(encoding="utf-8")))
     env["ANYPS5_SHADER_CACHE_DIR"] = str(play / "shader_cache")
-    if args.profile:
-        env.update(ANYPS5_FULLSCREEN="windowed", SAROS_EXCLUSIVE_1440P120="0", KYTY_PRESENT_MODE="immediate",
+    if profile:
+        env.update(ANYPS5_FULLSCREEN=display_mode, SAROS_EXCLUSIVE_1440P120="0", KYTY_PRESENT_MODE="immediate",
                    KYTY_GPU_THREAD_CPUS="off", KYTY_BDA_REGIONS="0", SAROS_PARALLEL_PROTECTION="1")
-        if args.profile in uploads:
-            env.update(SAROS_TRANSFER_BATCHES=uploads[args.profile], KYTY_IDLE_SUBMIT="1")
-        if args.profile == "retail-interpolation":
+        if profile in UPLOADS:
+            env.update(SAROS_TRANSFER_BATCHES=UPLOADS[profile], KYTY_IDLE_SUBMIT="1")
+        if profile == "retail-interpolation":
             env.pop("APS5_SAROS_NATIVE_1440P", None)
+    if env_overrides:
+        env.update(env_overrides)
     with tempfile.NamedTemporaryFile(dir=directory, prefix="saros-gameplay-", suffix=".ini", delete=False) as stream:
         config = Path(stream.name)
     try:
         config.write_text(text, encoding="utf-8")
         cmd = [play / "Saros.exe", "-NoSplash", "-NoMovie", "-ResX=2560", "-ResY=1440",
                f"-GameUserSettingsINI={GUEST_CONFIG}/{config.name}"]
-        if args.profile:
-            cmd.append("-DeviceProfile=" + profiles[args.profile])
-            return run_windowed(cmd, play, env)
+        if profile:
+            cmd.append("-DeviceProfile=" + PROFILES[profile])
+            if display_mode == "borderless":
+                return subprocess.run(cmd, cwd=play, env=env, stdout=output,
+                                      stderr=subprocess.STDOUT if output else None).returncode
+            from experiments.interpolation.windowed_client import run_windowed
+            return run_windowed(cmd, play, env, output=output)
         return subprocess.run(cmd, cwd=play, env=env).returncode
     finally:
         config.unlink(missing_ok=True)

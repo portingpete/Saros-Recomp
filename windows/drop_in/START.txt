@@ -1,0 +1,20 @@
+Saros for Windows x64
+
+Extract the entire ZIP. Drag your Saros game folder onto Play Saros.exe.
+You can also open Play Saros.exe and choose the folder, or place the folder
+inside Game Files and double-click Play Saros.exe.
+
+Use your extracted, decrypted PPSA07631 version 01.000.000 game files.
+Choose the folder containing eboot.bin and sce_sys. Keep it in place.
+The launcher prepares the game inside this kit, in Saros Windows. The first start
+can take several minutes while shaders compile. For best disk use, extract the kit on
+the same local NTFS drive as your game files.
+
+On the first two screens, hold Enter, Space, or controller Cross for about
+three seconds. In the Movement & Camera tutorial, use WASD to walk and the
+mouse or right stick to look around. Open Play Saros.exe again to resume.
+Your saves are in the prepared installation under play\_sd.
+If the game closes unexpectedly, see last-game.log in that installation.
+
+For other launchers, use --game PATH, --build-dir PATH, --fullscreen or
+--windowed, --prepare-only, or --check. Run Play Saros.exe --help for details.

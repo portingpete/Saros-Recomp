@@ -43,9 +43,24 @@ def configure(name, data):
     return output
 
 
-def build(repak, source, dest):
+def verify_archive(repak, pak):
+    info = subprocess.check_output([repak, "info", pak], text=True).splitlines()
+    required = {"mount point: ../../../", "version: V11", "encrypted index: false",
+                "compression: None", "path hash seed: Some(00000000)", "2 file entries"}
+    if not required.issubset(info):
+        raise ValueError("The display pak has unexpected settings")
+    entries = subprocess.check_output([repak, "hash-list", pak], text=True).splitlines()
+    expected = {f"{digest} {CONFIG}{name}" for name, digest in OUTPUT.items()}
+    if len(entries) != len(expected) or set(entries) != expected:
+        raise ValueError("The display pak has unexpected entries")
+
+
+def build(repak, source, dest, *, allow_equivalent=False):
     if dest.exists():
         if hashlib.sha256(dest.read_bytes()).hexdigest() == PAK_SHA256:
+            return
+        if allow_equivalent:
+            verify_archive(repak, dest)
             return
         raise FileExistsError(f"Another file occupies {dest}")
     with tempfile.TemporaryDirectory(dir=dest.parent) as temporary:
@@ -59,8 +74,14 @@ def build(repak, source, dest):
         subprocess.run([repak, "pack", "--version", "V11", "--mount-point", "../../../", "--path-hash-seed",
                         "0", work / "source", pak], check=True)
         if hashlib.sha256(pak.read_bytes()).hexdigest() != PAK_SHA256:
-            raise ValueError("The packed overlay differs from the measured build. Use repak 0.2.3.")
-        os.link(pak, dest)
+            if allow_equivalent:
+                verify_archive(repak, pak)
+            else:
+                raise ValueError("The packed overlay differs from the measured build. Use repak 0.2.3.")
+        if os.name == "nt":
+            os.rename(pak, dest)
+        else:
+            os.link(pak, dest)
 
 
 if __name__ == "__main__":

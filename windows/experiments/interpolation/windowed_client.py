@@ -67,8 +67,8 @@ def _windows(pid):
     win32gui.EnumWindows(visit, None)
     return windows
 
-def run_windowed(command, installation, env):
-    with subprocess.Popen(command, cwd=installation, env=env) as game:
+def run_windowed(command, installation, env, *, output=None):
+    with subprocess.Popen(command, cwd=installation, env=env, stdout=output, stderr=subprocess.STDOUT if output else None) as game:
         deadline = time.monotonic() + 90
         configured = False
         next_check = time.monotonic()

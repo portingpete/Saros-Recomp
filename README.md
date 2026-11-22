@@ -6,7 +6,11 @@
 
 This project tracks a Windows recompile using [AnyPS5](https://github.com/boykopovar/AnyPS5). The target is 120 FPS at a native render resolution of 2560 × 1440. Terra measures two 30-second prologue routes with simultaneous character movement and camera rotation. Each 10 FPS gain in their combined average gets a new recording and benchmark entry.
 
-## Run the native 1440p release
+## Drop-in Windows launcher
+
+The private Windows candidate accepts the original Saros game folder dropped onto **Play Saros.exe**. Terra tested it with an empty shader cache and a new save. Holding Enter advanced both setup screens, and the shipped keyboard controls moved Arjun and turned the camera in the prologue at 2560 × 1440. The game and launcher exited normally. The public source includes the launcher and packaging script. The binary package is undergoing dependency replacement before release. [Launcher source and CLI](windows/drop_in/README.md) · [Fresh-install test](windows/drop_in/rc01-acceptance.json)
+
+## Run the v0.1.0 native 1440p source kit
 
 The Windows kit includes the launcher, renderer build patches, profile generators and benchmark evidence for Saros PPSA07631 version 01.000.000. It works with the assembled native AnyPS5 Windows installation and supports starting a new game. [Download the native 1440p release](https://github.com/portingpete/Saros-Recomp/releases/tag/v0.1.0-native-1440p)
 

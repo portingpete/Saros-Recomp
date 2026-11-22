@@ -62,7 +62,10 @@ def build(repak, source, destination, mode):
                         "--path-hash-seed", "0", root / "src", pak], check=True)
         if hashlib.sha256(pak.read_bytes()).hexdigest() != PAKS[mode]:
             raise ValueError("Packed output differs from the measured profile. Check the repak version.")
-        os.link(pak, destination)
+        if os.name == "nt":
+            os.rename(pak, destination)
+        else:
+            os.link(pak, destination)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
