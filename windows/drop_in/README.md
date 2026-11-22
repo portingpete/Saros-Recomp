@@ -11,11 +11,11 @@ Play Saros.exe --game PATH --prepare-only
 Play Saros.exe --game PATH --check
 ```
 
-Preparing on the same NTFS volume lets Windows hard-link immutable game archives and movies. On different volumes, first launch needs space for a second copy. The launcher checks available space before staging, verifies the generated images, and retains settings and saves across subsequent launches. The windowed default requests a 2560 × 1440 client. Fullscreen uses the host's borderless display mode.
+Preparing on the same NTFS volume lets Windows hard-link immutable game archives and movies. On different volumes, first launch needs space for a second copy. The launcher checks available space before staging, verifies the generated images, and retains settings and saves across subsequent launches. The windowed default requests a 2560 Ã— 1440 client. Fullscreen uses the host's borderless display mode.
 
 ## Building a kit
 
-The packaging script accepts a manifest with flat host library filenames and their SHA-256 digests under `files`, a digest under `relinker_sha256`, and optional per-game launch variables under `environment`. Use the host and renderer notices for the particular binaries being assembled. Corresponding-source archives and their build instructions belong alongside the release. The existing v0.1.0 download is the original source and launcher kit.
+The packaging script accepts a manifest with flat host library filenames and their SHA-256 digests under `files`, a digest under `relinker_sha256`, and optional per-game launch variables under `environment`. Use the host and renderer notices for the particular binaries being assembled. Corresponding-source archives and their build instructions belong alongside the release. The v0.2.0 Windows release contains the assembled player kit. The v0.1.0 release contains the original developer kit.
 
 The assembler checks the pinned Python, pywin32 and repak archives and the original LF-encoded unwrap script before extraction. It compiles the small Windows entry point with MinGW and checks imports using the embedded interpreter.
 

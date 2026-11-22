@@ -6,24 +6,23 @@
 
 This project tracks a Windows recompile using [AnyPS5](https://github.com/boykopovar/AnyPS5). The target is 120 FPS at a native render resolution of 2560 × 1440. Terra measures two 30-second prologue routes with simultaneous character movement and camera rotation. Each 10 FPS gain in their combined average gets a new recording and benchmark entry.
 
-## Drop-in Windows launcher
+## Play on Windows
 
-The private Windows candidate accepts the original Saros game folder dropped onto **Play Saros.exe**. Terra tested it with an empty shader cache and a new save. Holding Enter advanced both setup screens, and the shipped keyboard controls moved Arjun and turned the camera in the prologue at 2560 × 1440. The game and launcher exited normally. The public source includes the launcher and packaging script. The binary package is undergoing dependency replacement before release. [Launcher source and CLI](windows/drop_in/README.md) · [Fresh-install test](windows/drop_in/rc01-acceptance.json)
+**[Download Saros for Windows (74 MB)](https://github.com/portingpete/Saros-Recomp/releases/download/v0.2.0-windows-drop-in/Saros-Windows-Drop-In.zip)**
 
-## Run the v0.1.0 native 1440p source kit
+1. Extract the ZIP. For best disk use, put it on the same NTFS drive as your game.
+2. Drag your own Saros folder onto **Play Saros.exe**. You can also double-click the launcher and select the folder containing `eboot.bin`. Use the extracted, decrypted PPSA07631 version 01.000.000.
+3. On the first two screens, hold **Enter** for about three seconds. Use **WASD** to move. Open **Play Saros.exe** again to resume.
 
-The Windows kit includes the launcher, renderer build patches, profile generators and benchmark evidence for Saros PPSA07631 version 01.000.000. It works with the assembled native AnyPS5 Windows installation and supports starting a new game. [Download the native 1440p release](https://github.com/portingpete/Saros-Recomp/releases/tag/v0.1.0-native-1440p)
+The kit includes the host, renderer and tools. It builds 41 Windows images locally, prepares native 2560 × 1440 output, and keeps your saves under `Saros Windows/play/_sd` inside the kit. First launch and entering new areas can pause while shaders compile.
 
-The benchmark renderer averaged **41.02 FPS**, then **38.51 FPS** on a repeat. The independently built renderer averaged **39.76 FPS** with a warm cache. All three results cover the same two moving prologue routes at 2560 × 1440, 100% internal scale, with FXAA enabled and frame generation disabled. [Route timings and renderer hashes](windows/experiments/native-uploads/measurements.json)
+Terra tested the exact download with an empty save and empty game shader cache on Windows with an RTX 5080. The test reached the Movement & Camera tutorial, verified forward movement, camera rotation and strafing, and closed normally. A second launch reopened the same save with a double-click, reused all 41 generated images and verified movement again. This release has been verified through the opening prologue. [Gameplay capture](media/drop-in-prologue.jpg) · [Fresh-install and resume evidence](windows/drop_in/release-acceptance.json) · [Source downloads and checksums](https://github.com/portingpete/Saros-Recomp/releases/tag/v0.2.0-windows-drop-in) · [Launcher CLI](windows/drop_in/README.md)
 
-Install Python 3.11 or newer and pywin32. Extract the kit to its own folder. Run these commands there, substituting the path to the installation containing your `Saros.exe` and `libs` folder. The first command checks the launch inputs. The second skips startup movies and starts the game.
+## Native 1440p benchmarks
 
-```powershell
-.\Run-Saros-Native-1440p.cmd --play "D:\Saros-Windows" --check
-.\Run-Saros-Native-1440p.cmd --play "D:\Saros-Windows"
-```
+The drop-in release averaged **33.57 in-game FPS** on the route-warmed run. The tight route reached **40.98 FPS** and the wide route **26.16 FPS**. The first pass with only the prologue cache averaged **26.23 FPS**. The wide runs followed different paths, and eight compute pipeline stalls of at least 100 ms overlapped 7.43 seconds of the warm wide run. [Release timings](windows/drop_in/release-benchmark.json) · [Six gameplay frames](media/drop-in-routes.jpg)
 
-To assemble the guest and renderer, generate the title-specific files locally from your own installation. The renderer build uses an original shader module from a matching local shader cache. The [host file manifest](windows/native-host-sha256.json) identifies all 419 libraries in the tested install. Terra also started the installed native renderer with empty save and shader-cache folders, held Cross for about three seconds on each first-run prompt, then walked, turned the camera and strafed in the Movement & Camera tutorial. [Fresh-start evidence](windows/experiments/native-uploads/fresh-start.json) [Guest build](windows/README.md) · [Native renderer, overlays and gameplay evidence](windows/experiments/native-uploads/README.md)
+The earlier benchmark renderer averaged **41.02 FPS**, then **38.51 FPS** on a repeat. Its independently built counterpart averaged **39.76 FPS** with a warm cache. Those results cover two moving prologue routes at 100% internal scale, with FXAA enabled and frame generation disabled. The drop-in release uses a different renderer. [Route timings and renderer hashes](windows/experiments/native-uploads/measurements.json) · [Original v0.1.0 source kit](https://github.com/portingpete/Saros-Recomp/releases/tag/v0.1.0-native-1440p)
 
 ## Other rendering experiments
 

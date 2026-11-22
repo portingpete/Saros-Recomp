@@ -1,0 +1,160 @@
+{
+  "player_zip_sha256": "1f7d5346b0f1c6fd478e6134337acb45c6549f0ac018512f61610767a5d83390",
+  "renderer_sha256": "74e317db63a28e20ad3ed38a03ee510c5f363bba28dc7fd48cca2772f836e0ba",
+  "videoout_sha256": "1931f7757df343c4d36321a285e63dfc0b5ecc96a3b2688572adcd9e6619b203",
+  "render_resolution": [
+    2560,
+    1440
+  ],
+  "internal_scale_percent": 100,
+  "cpu": "Core i9-14900K",
+  "gpu": "GeForce RTX 5080",
+  "frame_generation": false,
+  "antialiasing": "FXAA",
+  "method": "Two 30-second prologue routes with character and camera input. Both runs used the same checkpoint and normalized input schedules. The wide route reached different geometry. Background compiler processes were present.",
+  "runs": {
+    "prologue_cache": {
+      "run": "run-20261122-173930",
+      "checkpoint_sha256": "d5c9a44ab26485db239e8a5d01e9d21759bd52f5008e60747edc956281ff261c",
+      "starting_cache": {
+        "PPSA07631.bin": "348b469fbcfe7d4295cec9280dc0a69a375c1bae1e9d9a5e3b06ce07407dc472",
+        "PPSA07631.shaders": "874085e4bbbe348a7ea6b761211d4fead66fd33b7d8371c97fe84fb6c57f43fa"
+      },
+      "mean_engine_fps": 26.22723450080386,
+      "mean_completed_flip_fps": 26.27365,
+      "routes": {
+        "tight": {
+          "seconds": 30.017804,
+          "observed_completions": 851,
+          "completed_flip_fps": 28.3498,
+          "engine_tick_seconds": 29.963775000000002,
+          "engine_ticks": 848,
+          "engine_tick_fps": 28.300839930883207,
+          "median_ms": 26.951,
+          "p95_ms": 37.551,
+          "minimum_travel_world_units": 1373.157,
+          "capture_frames": [
+            9880,
+            10176,
+            10492
+          ],
+          "pipeline_stalls_100ms_or_longer": {
+            "reported_scopes_overlapping_route": 13,
+            "by_type": {
+              "compute-sync": 12,
+              "graphics-sync": 1
+            },
+            "union_overlap_seconds": 5.463,
+            "longest_reported_seconds": 1.815,
+            "scope": "Logged pipeline stalls (default threshold 100 ms), end timestamp and rounded duration. Union is measured overlap, not attribution of lost frames."
+          }
+        },
+        "wide": {
+          "seconds": 30.003051,
+          "observed_completions": 726,
+          "completed_flip_fps": 24.1975,
+          "engine_tick_seconds": 29.891988400000002,
+          "engine_ticks": 722,
+          "engine_tick_fps": 24.153629070724513,
+          "median_ms": 32.177,
+          "p95_ms": 47.458,
+          "minimum_travel_world_units": 2854.183,
+          "capture_frames": [
+            10976,
+            11164,
+            11384
+          ],
+          "pipeline_stalls_100ms_or_longer": {
+            "reported_scopes_overlapping_route": 7,
+            "by_type": {
+              "compute-sync": 7
+            },
+            "union_overlap_seconds": 5.18,
+            "longest_reported_seconds": 0.89,
+            "scope": "Logged pipeline stalls (default threshold 100 ms), end timestamp and rounded duration. Union is measured overlap, not attribution of lost frames."
+          }
+        }
+      },
+      "telemetry_drops": 0,
+      "game_exit_code": 0,
+      "raw_benchmark_sha256": "4e9eb2d44da24220e5811d28b5743c66d26b858389c7ccdecc6354627c107417",
+      "visual_review": {
+        "disposition": "Six 2560x1440 moving frames inspected",
+        "tight": "Player running across debris and curved steps; successive angles show the opening, floor, dash effect and HUD.",
+        "wide": "Player moving between large columns and steps. Middle frame shows a red vignette at a wall; final frame shows a blue-lit player and the surrounding room."
+      }
+    },
+    "route_warmed_cache": {
+      "run": "run-20261122-174302",
+      "checkpoint_sha256": "d5c9a44ab26485db239e8a5d01e9d21759bd52f5008e60747edc956281ff261c",
+      "starting_cache": {
+        "PPSA07631.bin": "9cefd30ead2772e7c01a36c7dbb7fe8c35ba61565ec9cf611faf34d4f765ee64",
+        "PPSA07631.shaders": "a016e9c32de1cd80683270313a5a018cd3cb5aac1f790f73188098e85f9c9ccb"
+      },
+      "mean_engine_fps": 33.568023266469694,
+      "mean_completed_flip_fps": 33.605900000000005,
+      "routes": {
+        "tight": {
+          "seconds": 30.024511,
+          "observed_completions": 1230,
+          "completed_flip_fps": 40.9665,
+          "engine_tick_seconds": 29.969110750000002,
+          "engine_ticks": 1228,
+          "engine_tick_fps": 40.9755234395802,
+          "median_ms": 23.432,
+          "p95_ms": 32.32,
+          "minimum_travel_world_units": 1347.109,
+          "capture_frames": [
+            10072,
+            10420,
+            10788
+          ],
+          "pipeline_stalls_100ms_or_longer": {
+            "reported_scopes_overlapping_route": 0,
+            "by_type": {},
+            "union_overlap_seconds": 0.0,
+            "longest_reported_seconds": 0,
+            "scope": "Logged pipeline stalls (default threshold 100 ms), end timestamp and rounded duration. Union is measured overlap, not attribution of lost frames."
+          }
+        },
+        "wide": {
+          "seconds": 30.024471,
+          "observed_completions": 788,
+          "completed_flip_fps": 26.2453,
+          "engine_tick_seconds": 29.8541431,
+          "engine_ticks": 781,
+          "engine_tick_fps": 26.160523093359192,
+          "median_ms": 25.638,
+          "p95_ms": 41.865,
+          "minimum_travel_world_units": 2998.039,
+          "capture_frames": [
+            11388,
+            11724,
+            11892
+          ],
+          "pipeline_stalls_100ms_or_longer": {
+            "reported_scopes_overlapping_route": 8,
+            "by_type": {
+              "compute-sync": 8
+            },
+            "union_overlap_seconds": 7.433,
+            "longest_reported_seconds": 3.1,
+            "scope": "Logged pipeline stalls (default threshold 100 ms), end timestamp and rounded duration. Union is measured overlap, not attribution of lost frames."
+          }
+        }
+      },
+      "telemetry_drops": 0,
+      "game_exit_code": 0,
+      "raw_benchmark_sha256": "67dce111593311843258d72a2c6e820ad1a8d9f56d3b8b8d6f550c04e1f46320",
+      "visual_review": {
+        "disposition": "All six 2560x1440 frames show the player and room, changing running or dash poses and scene progression.",
+        "tight": "Moving between tall wall openings with changing angles and motion trail.",
+        "wide": "Begins by the raised ledge. The second and third frames reach open orange steps and floor, unlike prime's wall and red vignette. Same input schedule and checkpoint, visibly divergent traversal."
+      }
+    }
+  },
+  "warm_route_contact_sheet": {
+    "path": "media/drop-in-routes.jpg",
+    "sha256": "61882517bfdf03991bd247d6d9f171e4e710ffa9b28a3f38790868337cc671a6"
+  }
+}

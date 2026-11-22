@@ -1,0 +1,77 @@
+{
+  "package": {
+    "sha256": "1f7d5346b0f1c6fd478e6134337acb45c6549f0ac018512f61610767a5d83390",
+    "renderer": "74e317db63a28e20ad3ed38a03ee510c5f363bba28dc7fd48cca2772f836e0ba",
+    "videoout": "1931f7757df343c4d36321a285e63dfc0b5ecc96a3b2688572adcd9e6619b203",
+    "exe": "6bd1ce70dea706e606aa49133166cd523e6317d559e71dbfa3d9e0117303f0b4"
+  },
+  "setup": {
+    "portable_default": true,
+    "first_workspace_absent": true,
+    "guest_images_verified": 41,
+    "host_files_verified": 68
+  },
+  "live_settings": {
+    "r.AntiAliasingMethod": [
+      1,
+      1
+    ],
+    "r.FidelityFX.FI.Enabled": [
+      0,
+      0
+    ]
+  },
+  "movement_world_units": {
+    "forward": 2962.047,
+    "strafe": 2273.731
+  },
+  "module_inventories": {
+    "modules-first-window": {
+      "total": 205,
+      "shipped_hosts": 68,
+      "enum_errors": [],
+      "mismatches": []
+    },
+    "modules-language": {
+      "total": 223,
+      "shipped_hosts": 68,
+      "enum_errors": [],
+      "mismatches": []
+    },
+    "modules-moving": {
+      "total": 223,
+      "shipped_hosts": 68,
+      "enum_errors": [],
+      "mismatches": []
+    },
+    "modules-tutorial": {
+      "total": 223,
+      "shipped_hosts": 68,
+      "enum_errors": [],
+      "mismatches": []
+    }
+  },
+  "process_exit_codes": [
+    0,
+    0
+  ],
+  "preview": {
+    "path": "media/drop-in-prologue.jpg",
+    "sha256": "d077c906092ec182d644d23799f74d4aae0dceede20334124e0f29c70cdff9c1"
+  },
+  "scope": "First-launch offline prologue on Windows x64, RTX 5080. Resolution 2560 x 1440, FXAA and no frame generation.",
+  "resume": {
+    "unattended_game_start": true,
+    "folder_picker_required": false,
+    "prepared_guest_images_with_unchanged_hash_and_mtime": 41,
+    "rebuilt_guest_images": 0,
+    "passed_through_all_prior_save_and_cache_hashes": 11,
+    "matched_previous_save_position": true,
+    "movement_world_units": 2108.645,
+    "moving_shipped_modules": 68,
+    "process_exit_codes": [
+      0,
+      0
+    ]
+  }
+}
