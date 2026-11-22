@@ -51,7 +51,8 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--play", type=Path, required=True, help="Installation containing Saros.exe, libs and app0")
     parser.add_argument("--check", action="store_true", help="Verify the launch inputs and exit")
-    profiles = {"native-fxaa": "SarosNativeFXAA", "interpolation": "SarosInterpolated",
+    uploads = {"native-upload-scatter": "0", "native-upload-copies": "1"}
+    profiles = {**dict.fromkeys(uploads, "SarosNativeFXAA"), "native-fxaa": "SarosNativeFXAA", "interpolation": "SarosInterpolated",
                 "retail-interpolation": "SarosRetailInterpolation"}
     parser.add_argument("--profile", choices=profiles, help="Use a profile from the optional presentation experiment")
     args = parser.parse_args()
@@ -79,6 +80,8 @@ def main():
         with (play / "libs/kyty_gpu.prx").open("rb") as stream, mmap.mmap(stream.fileno(), 0, access=mmap.ACCESS_READ) as image:
             if image.find(b"[rgba16s-storage]") == -1:
                 parser.error("Install the renderer built with the presentation experiment patch")
+            if args.profile in uploads and image.find(b"[transfer-batches]") == -1:
+                parser.error("Install the renderer built with the native upload patch")
         for group in ("Shadow", "GlobalIllumination", "Reflection", "Effects"):
             groups[f"sg.{group}Quality"] = "0"
         video["bUseVSync"] = "False"
@@ -93,6 +96,8 @@ def main():
     if args.profile:
         env.update(ANYPS5_FULLSCREEN="windowed", SAROS_EXCLUSIVE_1440P120="0", KYTY_PRESENT_MODE="immediate",
                    KYTY_GPU_THREAD_CPUS="off", KYTY_BDA_REGIONS="0", SAROS_PARALLEL_PROTECTION="1")
+        if args.profile in uploads:
+            env.update(SAROS_TRANSFER_BATCHES=uploads[args.profile], KYTY_IDLE_SUBMIT="1")
         if args.profile == "retail-interpolation":
             env.pop("APS5_SAROS_NATIVE_1440P", None)
     with tempfile.NamedTemporaryFile(dir=directory, prefix="saros-gameplay-", suffix=".ini", delete=False) as stream:

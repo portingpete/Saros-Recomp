@@ -1,0 +1,181 @@
+{
+  "prior_published_native_fps": 30.962269663148017,
+  "metric": "Arithmetic mean of two moving route rates. Each route counts ordered completed guest flips over its measured interval. Independent Unreal FEngineLoop tick counts are supplied.",
+  "render_size": [
+    2560,
+    1440
+  ],
+  "render_scale_percent": 100,
+  "gpu": "NVIDIA GeForce RTX 5080",
+  "cpu": "Intel Core i9-14900K",
+  "fxaa": true,
+  "frame_generation": false,
+  "renderer_patch_sha256": "24c1f9184344a2818e2b73957a72343c10c74ed9132e2fab11f88ba27ad21bfb",
+  "runs": {
+    "copies": {
+      "run": "044911-e47097",
+      "transfer_commands": true,
+      "mean_route_fps": 36.2693,
+      "routes": {
+        "seed_circle": {
+          "observed_completions": 1145,
+          "seconds": 30.019874,
+          "completed_flip_fps": 38.1414,
+          "median_ms": 25.376,
+          "p95_ms": 34.749,
+          "engine_ticks": 1139,
+          "engine_tick_seconds": 29.853238100000002,
+          "engine_tick_fps": 38.15331510051501,
+          "minimum_travel_world_units": 1224.854,
+          "pad_events_observed": 0,
+          "frame_capture_sha256": [
+            "182c825f321bdce0e7593ba0810eb3031c9db3e26a3617ec96cca4d73d5e9e21",
+            "6dd71ab5854f6a7ed00e39994944f6365901e87739b55407c61a8732846fc767",
+            "6038c89ab343e0a3c66094d187f412c7492b2c86a5179f0234b1fdd3478151bb"
+          ]
+        },
+        "circle_camera": {
+          "observed_completions": 1032,
+          "seconds": 30.003397,
+          "completed_flip_fps": 34.3961,
+          "median_ms": 26.89,
+          "p95_ms": 37.925,
+          "engine_ticks": 1030,
+          "engine_tick_seconds": 29.905432150000003,
+          "engine_tick_fps": 34.441903224595265,
+          "minimum_travel_world_units": 4413.441,
+          "pad_events_observed": 0,
+          "frame_capture_sha256": [
+            "9c25006c48c7e517a47cd889754e18f234656c75f6d5a5260774f5fedf0adf3b",
+            "6cdc1d557c1e540c4d124d6f6fd17289c49c7683ae333f7c88a91c29024a0a9e",
+            "bc5d76a66aafd6668168359d11169b9cc22f6eebec2c16051934faa3ffdce792"
+          ]
+        }
+      },
+      "renderer_sha256": "54f30a238fa10cb37e0ca66d94e4a7168e0851ee7f8ce48d42eaa30d8f34d67c",
+      "game_sha256": "6bd1ce70dea706e606aa49133166cd523e6317d559e71dbfa3d9e0117303f0b4",
+      "profile_overlay_sha256": "283e8065dd5ac01dc1aaf2efcdc43b0902770204ff14980278dff6b676742af6",
+      "windows_client_pixels": [
+        2560,
+        1440
+      ],
+      "telemetry_drops": 0,
+      "game_exit": 0,
+      "last_cumulative_upload_sample": {
+        "batches": 12288,
+        "destinations": 7817602,
+        "regions": 9547302
+      }
+    },
+    "scatter": {
+      "run": "045334-4d224b",
+      "transfer_commands": false,
+      "mean_route_fps": 41.0174,
+      "routes": {
+        "seed_circle": {
+          "observed_completions": 1297,
+          "seconds": 30.023155,
+          "completed_flip_fps": 43.2,
+          "median_ms": 22.258,
+          "p95_ms": 31.349,
+          "engine_ticks": 1290,
+          "engine_tick_seconds": 29.87234885,
+          "engine_tick_fps": 43.183748505266934,
+          "minimum_travel_world_units": 1365.711,
+          "pad_events_observed": 0,
+          "frame_capture_sha256": [
+            "1d615b59414988868f9704d02701d9e2f4921fc9dbaed39ecae0aa32d12fc31b",
+            "89b8dfe39bbabe0b61e52d1be6f9a429473043d99fa7cd1e7135106745094ee0",
+            "cb461081f39b134a82d4c588c9d6974c3c9966d284dd6c8f9d25daef482b0cee"
+          ]
+        },
+        "circle_camera": {
+          "observed_completions": 1166,
+          "seconds": 30.024571,
+          "completed_flip_fps": 38.8349,
+          "median_ms": 23.257,
+          "p95_ms": 33.668,
+          "engine_ticks": 1165,
+          "engine_tick_seconds": 30.0064853,
+          "engine_tick_fps": 38.82494028715852,
+          "minimum_travel_world_units": 4662.116,
+          "pad_events_observed": 0,
+          "frame_capture_sha256": [
+            "b8f1e8b720fe02d6043590a638b319c4a181afa9e2e720d2c67328dcaedf6c05",
+            "d1625891d0bc7ba08e4fd7d8a73be42391d23085a1c151d70bfd372a130dbf93",
+            "1fd60141545930ef2d995a85f8754e2defc923d6d915c8e48bf40f74602baae8"
+          ]
+        }
+      },
+      "renderer_sha256": "54f30a238fa10cb37e0ca66d94e4a7168e0851ee7f8ce48d42eaa30d8f34d67c",
+      "game_sha256": "6bd1ce70dea706e606aa49133166cd523e6317d559e71dbfa3d9e0117303f0b4",
+      "profile_overlay_sha256": "283e8065dd5ac01dc1aaf2efcdc43b0902770204ff14980278dff6b676742af6",
+      "windows_client_pixels": [
+        2560,
+        1440
+      ],
+      "telemetry_drops": 0,
+      "game_exit": 0,
+      "last_cumulative_upload_sample": {
+        "batches": 12288,
+        "destinations": 7977437,
+        "regions": 9528508
+      }
+    },
+    "scatter_repeat": {
+      "run": "045952-7abe1a",
+      "transfer_commands": false,
+      "mean_route_fps": 38.5099,
+      "routes": {
+        "seed_circle": {
+          "observed_completions": 1260,
+          "seconds": 30.005635,
+          "completed_flip_fps": 41.9921,
+          "median_ms": 22.918,
+          "p95_ms": 32.235,
+          "engine_ticks": 1256,
+          "engine_tick_seconds": 29.869605200000002,
+          "engine_tick_fps": 42.04943425231479,
+          "minimum_travel_world_units": 1927.545,
+          "pad_events_observed": 0,
+          "frame_capture_sha256": [
+            "269d181e64e6c622c4e5bc4a933293f35b9ce6913f84e6c8448339cb8c0dc82e",
+            "426f8cd1de2ca2a5fea01f088bdc2c8376dfd5f1b5b76a2486e4239539af9cea",
+            "8c284840fce6fd41e880596540e204beb9d8991a77a8fe3ee885960e9b76a292"
+          ]
+        },
+        "circle_camera": {
+          "observed_completions": 1051,
+          "seconds": 30.004941,
+          "completed_flip_fps": 35.0276,
+          "median_ms": 26.452,
+          "p95_ms": 39.592,
+          "engine_ticks": 1048,
+          "engine_tick_seconds": 29.890867500000002,
+          "engine_tick_fps": 35.06087603513013,
+          "minimum_travel_world_units": 3228.186,
+          "pad_events_observed": 0,
+          "frame_capture_sha256": [
+            "e6514d9289f61bff7fe5cbe2693ff812b38923a3622f3ac0411969d27f87ceda",
+            "4e46cd00c488ac404cdfe24286b35de90dc642697e8fdbe7aaa7f2887e9e2e76",
+            "d44c40467ecf17743247ff96676d7435582fc97db07ed6f34befebe56e7480b7"
+          ]
+        }
+      },
+      "renderer_sha256": "54f30a238fa10cb37e0ca66d94e4a7168e0851ee7f8ce48d42eaa30d8f34d67c",
+      "game_sha256": "6bd1ce70dea706e606aa49133166cd523e6317d559e71dbfa3d9e0117303f0b4",
+      "profile_overlay_sha256": "283e8065dd5ac01dc1aaf2efcdc43b0902770204ff14980278dff6b676742af6",
+      "windows_client_pixels": [
+        2560,
+        1440
+      ],
+      "telemetry_drops": 0,
+      "game_exit": 0,
+      "last_cumulative_upload_sample": {
+        "batches": 12288,
+        "destinations": 8324947,
+        "regions": 10112858
+      }
+    }
+  }
+}

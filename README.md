@@ -6,6 +6,8 @@
 
 This project tracks a Windows recompile using [AnyPS5](https://github.com/boykopovar/AnyPS5). The target is 120 FPS at a native render resolution of 2560 × 1440. Terra measures two 30-second prologue routes with simultaneous character movement and camera rotation. Each 10 FPS gain in their combined average gets a new recording and benchmark entry.
 
+The native FXAA build reached 41.02 FPS over the two prologue routes and 38.51 FPS on an independent repeat. Both runs used 100% internal render scale with frame generation disabled. [Gameplay timings, renderer patch and launch commands](windows/experiments/native-uploads/README.md)
+
 A separate frame-interpolation experiment produced 66.16 completed flips per second at native 1440p while the game advanced 33.11 frames per second. The benchmark includes both moving routes, six consecutive swapchain images and the renderer source changes. [Interpolation results and build instructions](windows/experiments/interpolation/README.md)
 
 The Windows optical-flow build at 2560 × 1440 reached 122.04 and 123.15 driver-reported scanouts per second on the two moving routes. The game engine advanced at 29.80 and 29.91 FPS with five generated images per original frame. Repeating those routes with the same build produced 114.79 and 109.58 refresh-separated scanouts per second. [Display timing, source patch and launcher](windows/experiments/optical-flow/README.md)

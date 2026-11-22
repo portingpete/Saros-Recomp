@@ -117,6 +117,64 @@
         "previous_run": "Vulkan device loss during tight sprint",
         "clean_exit_on_repeat": true
       }
+    },
+    {
+      "date": "2026-11-22",
+      "preset": "Native FXAA, first run",
+      "average_fps": 41.0174,
+      "routes": [
+        {
+          "name": "Tight sprint circle",
+          "frames": 1297,
+          "seconds": 30.023155,
+          "fps": 43.2,
+          "p95_ms": 31.349,
+          "minimum_travel_units": 1365.711
+        },
+        {
+          "name": "Wide sprint circle",
+          "frames": 1166,
+          "seconds": 30.024571,
+          "fps": 38.8349,
+          "p95_ms": 33.668,
+          "minimum_travel_units": 4662.116
+        }
+      ],
+      "render_size": [
+        2560,
+        1440
+      ],
+      "render_scale_percent": 100,
+      "device": "NVIDIA GeForce RTX 5080",
+      "cpu": "Intel Core i9-14900K",
+      "game_sha256": "6bd1ce70dea706e606aa49133166cd523e6317d559e71dbfa3d9e0117303f0b4",
+      "driver_sha256": "54f30a238fa10cb37e0ca66d94e4a7168e0851ee7f8ce48d42eaa30d8f34d67c",
+      "comparison_note": "The same renderer averaged 38.51 FPS on an independent repeat (41.99 tight turn, 35.03 wide turn). The November 20 benchmark averaged 30.96 FPS with a different profile.",
+      "display_note": "The game and its Windows client ran at 2560 \u00d7 1440 on a 360 Hz desktop. Engine ticks and consecutive completed guest flips agreed on the first run. Both runs used FXAA with frame generation disabled.",
+      "runtime_exit": "0x00000000",
+      "launcher_repeat": {
+        "average_fps": 38.5099,
+        "routes": [
+          {
+            "name": "Tight sprint circle",
+            "frames": 1260,
+            "seconds": 30.005635,
+            "fps": 41.9921,
+            "p95_ms": 32.235,
+            "minimum_travel_units": 1927.545
+          },
+          {
+            "name": "Wide sprint circle",
+            "frames": 1051,
+            "seconds": 30.004941,
+            "fps": 35.0276,
+            "p95_ms": 39.592,
+            "minimum_travel_units": 3228.186
+          }
+        ],
+        "clean_exit_on_repeat": true
+      },
+      "evidence": "windows/experiments/native-uploads/measurements.json"
     }
   ]
 }

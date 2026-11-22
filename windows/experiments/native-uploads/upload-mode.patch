@@ -1,0 +1,24 @@
+--- a/core/kyty/graphics/host_gpu/renderer/cache/bufferCache.cpp
++++ b/core/kyty/graphics/host_gpu/renderer/cache/bufferCache.cpp
+@@ -3234,7 +3234,20 @@
+ 	auto& command = m_scheduler.Current();
+ 	command.EndRendering();
+ 	const auto native = command.Handle();
+-	if (m_upload_batch_buffers.size() > 1 && ScatterUploadBatch(native)) {
++	static const bool useTransfer = [] {
++        const char* value = std::getenv("SAROS_TRANSFER_BATCHES");
++        return value != nullptr && std::strcmp(value, "1") == 0;
++    }();
++    static thread_local uint64_t batches = 0, potentialDestinations = 0, potentialRegions = 0;
++    if (m_upload_batch_buffers.size() > 1) {
++        potentialDestinations += m_upload_batch_buffers.size();
++        potentialRegions += m_upload_batch_copies.size();
++        if ((++batches & 4095u) == 0)
++            std::fprintf(stderr, "[transfer-batches] transfer=%u batches=%llu destinations=%llu regions=%llu\n",
++                         static_cast<unsigned>(useTransfer), static_cast<unsigned long long>(batches),
++                         static_cast<unsigned long long>(potentialDestinations), static_cast<unsigned long long>(potentialRegions));
++    }
++    if (!useTransfer && m_upload_batch_buffers.size() > 1 && ScatterUploadBatch(native)) {
+ 		m_upload_batch_buffers.clear();
+ 		m_upload_batch_copies.clear();
+ 		return;

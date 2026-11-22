@@ -9,7 +9,7 @@ Saros produced 66.16 completed flips per second at a native render resolution of
 | Retail 41.666–60% range | Tight turn | 36.55 | 73.03 | 31.80 ms |
 | Retail 41.666–60% range | Wide turn | 31.25 | 62.46 | 38.27 ms |
 
-Both profiles produced a 2560 × 1440 Vulkan swapchain. Each process closed normally after two 30-second routes with zero dropped telemetry records. With interpolation disabled, the engine and flip counters agreed on both routes. With it enabled, the flip count doubled. PresentMon returned no physical display samples on the isolated test desktop. The public native-rendering milestone remains 30.96 FPS. [Native benchmarks](../../../benchmarks.json)
+Both profiles produced a 2560 × 1440 Vulkan swapchain. Each process closed normally after two 30-second routes with zero dropped telemetry records. With interpolation disabled, the engine and flip counters agreed on both routes. With it enabled, the flip count doubled. PresentMon returned no physical display samples on the isolated test desktop. At the time of this measurement the published native-rendering milestone was 30.96 FPS. [Native benchmarks](../../../benchmarks.json)
 
 The six images below came from consecutive calls to present during a separate tight-turn run. Both even and odd frames showed the character, scenery and HUD. All six original 2560 × 1440 images had distinct hashes.
 
