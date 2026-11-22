@@ -1,0 +1,229 @@
+{
+  "date": "2026-11-22",
+  "gpu": "GeForce RTX 5080",
+  "display_driver": "617.14",
+  "cpu": "Intel Core i9-14900K",
+  "ram_gib": 32,
+  "output_pixels": [
+    2560,
+    1440
+  ],
+  "present_mode": "immediate",
+  "engine_counter": "FEngineLoop::Tick, monotonic counter sampled from a matching Saros.exe during the timed route",
+  "presentation_counter": "VideoOut consecutive completed flips",
+  "physical_display_timing": "PresentMon returned zero display samples on the isolated Windows desktop",
+  "comparison_native_profile": [
+    {
+      "route": "seed_circle",
+      "engine_ticks_per_second": 40.9607,
+      "completed_flips_per_second": 40.9655
+    },
+    {
+      "route": "circle_camera",
+      "engine_ticks_per_second": 35.2465,
+      "completed_flips_per_second": 35.2586
+    }
+  ],
+  "interpolation_runs": [
+    {
+      "mode": "interpolation",
+      "game_resolution_bounds_percent": [
+        100,
+        100
+      ],
+      "guest_aa_method": 4,
+      "guest_fi": 1,
+      "native_game_ticks_per_second_mean": 33.1076,
+      "videoout_completed_flips_per_second_mean": 66.1629,
+      "routes": [
+        {
+          "route": "seed_circle",
+          "guest_ticks_per_second": 34.5323,
+          "completed_flips_per_second": 69.0263,
+          "completed_flips": 2071,
+          "duration_seconds": 30.003072,
+          "median_flip_interval_ms": 15.307,
+          "p95_flip_interval_ms": 32.439,
+          "engine_samples": 276,
+          "movement_world_units": 1291.725
+        },
+        {
+          "route": "circle_camera",
+          "guest_ticks_per_second": 31.6829,
+          "completed_flips_per_second": 63.2996,
+          "completed_flips": 1900,
+          "duration_seconds": 30.016003,
+          "median_flip_interval_ms": 16.176,
+          "p95_flip_interval_ms": 36.111,
+          "engine_samples": 276,
+          "movement_world_units": 4432.107
+        }
+      ],
+      "shader_format_70_errors": 0,
+      "game_exit": 0,
+      "dropped_telemetry": 0,
+      "timed_swapchain_images": 6,
+      "renderer_sha256": "ae88b5a68da4cc9c95653d08c3b85d3aa17de398766688fd7cb269ccef53ac0c"
+    },
+    {
+      "mode": "retail-interpolation",
+      "game_resolution_bounds_percent": [
+        41.666,
+        60
+      ],
+      "guest_aa_method": 4,
+      "guest_fi": 1,
+      "native_game_ticks_per_second_mean": 33.8982,
+      "videoout_completed_flips_per_second_mean": 67.7455,
+      "routes": [
+        {
+          "route": "seed_circle",
+          "guest_ticks_per_second": 36.5463,
+          "completed_flips_per_second": 73.0302,
+          "completed_flips": 2192,
+          "duration_seconds": 30.014997,
+          "median_flip_interval_ms": 12.414,
+          "p95_flip_interval_ms": 31.797,
+          "engine_samples": 277,
+          "movement_world_units": 2231.52
+        },
+        {
+          "route": "circle_camera",
+          "guest_ticks_per_second": 31.25,
+          "completed_flips_per_second": 62.4608,
+          "completed_flips": 1874,
+          "duration_seconds": 30.002799,
+          "median_flip_interval_ms": 14.722,
+          "p95_flip_interval_ms": 38.27,
+          "engine_samples": 277,
+          "movement_world_units": 2370.653
+        }
+      ],
+      "shader_format_70_errors": 0,
+      "game_exit": 0,
+      "dropped_telemetry": 0,
+      "timed_swapchain_images": 6,
+      "renderer_sha256": "ae88b5a68da4cc9c95653d08c3b85d3aa17de398766688fd7cb269ccef53ac0c"
+    }
+  ],
+  "consecutive_swapchain_capture": {
+    "scope": "Six consecutive vkQueuePresentKHR images from the moving tight route. Physical display scanout timing was not measured.",
+    "first_frame": 2216,
+    "dimensions": [
+      2560,
+      1440
+    ],
+    "first_image_seconds_into_route": 6.127068100000001,
+    "screens": [
+      {
+        "frame": 2216,
+        "sha256": "9f2d8d543f2e336e4e5a7f70d8dade0ed0b4e106e35570b2a439871e6422fc91",
+        "luma": 35.145954861111115,
+        "frac_luma_above_15": 0.7077
+      },
+      {
+        "frame": 2217,
+        "sha256": "fc340fec398f539c4cc771d6d369035e315cc021ecc123f2cea10a5f2fed5fd8",
+        "luma": 34.87420138888889,
+        "frac_luma_above_15": 0.7037
+      },
+      {
+        "frame": 2218,
+        "sha256": "22678cf33e59a66751c5cb5f55530452e817694b058cf3e6b705e29110920a16",
+        "luma": 34.702534722222225,
+        "frac_luma_above_15": 0.6999
+      },
+      {
+        "frame": 2219,
+        "sha256": "80864a28312ae6bc0d41ce4ef1d8bd71ce95acb12d167bfce74d39d9c39766f7",
+        "luma": 34.543680555555554,
+        "frac_luma_above_15": 0.6963
+      },
+      {
+        "frame": 2220,
+        "sha256": "7d8cecd16592f6dcd9f4bcba35e24bdac9340c15553e158b5034ee4aa74b2c2e",
+        "luma": 34.42697916666667,
+        "frac_luma_above_15": 0.6931
+      },
+      {
+        "frame": 2221,
+        "sha256": "dacb4ad74eff60697dd5108fd4ae6d248013eace5927afeeb92cf5ec61569fb7",
+        "luma": 34.32100694444444,
+        "frac_luma_above_15": 0.6895
+      }
+    ],
+    "pairs": [
+      {
+        "frames": [
+          2216,
+          2217
+        ],
+        "mean_abs_luma": 1.372
+      },
+      {
+        "frames": [
+          2217,
+          2218
+        ],
+        "mean_abs_luma": 1.261
+      },
+      {
+        "frames": [
+          2218,
+          2219
+        ],
+        "mean_abs_luma": 1.225
+      },
+      {
+        "frames": [
+          2219,
+          2220
+        ],
+        "mean_abs_luma": 1.251
+      },
+      {
+        "frames": [
+          2220,
+          2221
+        ],
+        "mean_abs_luma": 1.228
+      }
+    ],
+    "triplets": [
+      {
+        "frame": 2217,
+        "mean_abs_luma_to_blend_of_neighbors": 0.968,
+        "endpoints_difference": 2.138
+      },
+      {
+        "frame": 2218,
+        "mean_abs_luma_to_blend_of_neighbors": 0.858,
+        "endpoints_difference": 2.014
+      },
+      {
+        "frame": 2219,
+        "mean_abs_luma_to_blend_of_neighbors": 0.891,
+        "endpoints_difference": 1.969
+      },
+      {
+        "frame": 2220,
+        "mean_abs_luma_to_blend_of_neighbors": 0.872,
+        "endpoints_difference": 2.0
+      }
+    ]
+  },
+  "source_rebuild": {
+    "renderer_sha256": "e0b2d85cd9c22a6a6c8cb748c1ed774ff4fc2e8765c37db5726bbaec63ef365f",
+    "abi_exit": 0,
+    "target": "kyty_gpu_dll_bundle",
+    "files": 16,
+    "captured_2560x1440_images": 6,
+    "game_exit": 0,
+    "telemetry_drops": 0,
+    "runtime_note": "The rebuilt renderer loaded the Vulkan driver cache and compiled its programs locally. Its shader stamp differed from the measured renderer.",
+    "completed_flips_per_second": [
+      65.6993,
+      54.1201
+    ]
+  }
+}

@@ -1,0 +1,1080 @@
+diff --git a/core/kyty/CMakeLists.txt b/core/kyty/CMakeLists.txt
+--- a/core/kyty/CMakeLists.txt
++++ b/core/kyty/CMakeLists.txt
+@@ -280,6 +280,7 @@
+         "${KYTY_THIRD_PARTY_DIR}/Vulkan-Headers/include"
+         "${KYTY_THIRD_PARTY_DIR}/VulkanMemoryAllocator/include"
+         "${KYTY_THIRD_PARTY_DIR}/SPIRV-Headers/include"
++        "${KYTY_THIRD_PARTY_DIR}/SPIRV-Tools"
+     PRIVATE
+         "${KYTY_THIRD_PARTY_DIR}/stb"
+         "${KYTY_THIRD_PARTY_DIR}/zstd/lib"
+diff --git a/core/kyty/graphics/guest_gpu/graphicsRun.cpp b/core/kyty/graphics/guest_gpu/graphicsRun.cpp
+--- a/core/kyty/graphics/guest_gpu/graphicsRun.cpp
++++ b/core/kyty/graphics/guest_gpu/graphicsRun.cpp
+@@ -1,3 +1,4 @@
++#include "graphics/host_gpu/bdaSubmissionSync.h"
+ #include "graphics/guest_gpu/graphicsRun.h"
+ 
+ #include "common/assert.h"
+@@ -398,6 +399,7 @@
+ 
+ uint64_t GuestGpu::EmitOperation(GpuOperation&& operation) {
+ 	const auto sequence = ++m_emitted;
++	BdaSubmissionSync::NoteOperation(sequence, operation.processor);
+ 	operation.sequence  = sequence;
+ 	m_operations.Push(std::move(operation));
+ 	return sequence;
+@@ -932,6 +934,7 @@
+ 	BindState(operation.state);
+ 	m_renderer.GetRenderExecutor().SetTableTicket(operation.table_ticket);
+ 	m_renderer.NoteOperation(operation.submit_id, operation.after_wait);
++	BdaSubmissionSync::BeginOperation(operation.sequence);
+ 	auto& executor = m_renderer.GetRenderExecutor();
+ 	executor.UseContextId(operation.state.context_id, operation.state.user_config_id);
+ 	executor.BeginGuestOperation(static_cast<uint32_t>(m_interrupt_event_id),
+@@ -1143,6 +1146,7 @@
+ 
+ 	m_wait_since_operation = true;
+ 	if (TestWaitRegMemValue(ReadDecisionValue<T>(addr), ref, mask, func)) {
++		BdaSubmissionSync::SetInputTime(this, BdaSubmissionSync::NowNs());
+ 		m_renderer.CollectHotPageWrites();
+ 	} else {
+ 		if (g_gpu_state != nullptr) {
+@@ -1345,6 +1349,7 @@
+ 	} else if (submission.queue_id == 0) {
+ 		m_scout_reset = true;
+ 	}
++	if (submission.type == SubmissionType::Commands) BdaSubmissionSync::NoteEnqueued(submission.commands.data());
+ 	m_queues[submission.queue_id].push_back(std::move(submission));
+ 	m_submission_count++;
+ 	m_work_epoch.fetch_add(1, std::memory_order_release);
+@@ -1661,6 +1666,7 @@
+ 	}
+ 	submission.yielded = false;
+ 	auto& cp           = GetProcessor(submission.queue_id);
++	if (submission.type != SubmissionType::Commands) BdaSubmissionSync::SetInputTime(&cp, BdaSubmissionSync::NowNs());
+ 
+ 	cp.BufferInit();
+ 	bool complete = true;
+@@ -1722,6 +1728,7 @@
+ 	EXIT_IF(g_current_execution != nullptr);
+ 	EXIT_IF(commands.size() > UINT32_MAX);
+ 	if (execution.m_buffer_stack.empty() && !commands.empty()) {
++		BdaSubmissionSync::SetInputTime(this, BdaSubmissionSync::EnqueuedTime(commands.data()));
+ 		m_renderer.CollectHotPageWrites();
+ 		m_renderer.GetBufferCache().NoteCommandBuffer(reinterpret_cast<uint64_t>(commands.data()), commands.size_bytes());
+ 		execution.m_buffer_stack.push_back({commands});
+diff --git a/core/kyty/graphics/host_gpu/bdaSubmissionSync.h b/core/kyty/graphics/host_gpu/bdaSubmissionSync.h
+new file mode 100644
+--- /dev/null
++++ b/core/kyty/graphics/host_gpu/bdaSubmissionSync.h
+@@ -0,0 +1,190 @@
++#pragma once
++
++#include <array>
++#include <atomic>
++#include <chrono>
++#include <cstdint>
++#include <cstdio>
++#include <cstdlib>
++#include <mutex>
++#include <unordered_set>
++#include <utility>
++#include <vector>
++
++namespace Libs::Graphics::BdaSubmissionSync {
++
++inline constexpr uint64_t PageSize = 4096;
++
++inline uint64_t NowNs() noexcept {
++	return static_cast<uint64_t>(
++	    std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now().time_since_epoch()).count());
++}
++
++inline bool Enabled() noexcept {
++	static const bool on = [] {
++		const char* value = std::getenv("KYTY_BDA_SUBMISSION_SYNC");
++		return value == nullptr || value[0] != '0';
++	}();
++	return on;
++}
++
++struct Enqueued {
++	std::atomic<const void*> commands {nullptr};
++	std::atomic<uint64_t>    ns {0};
++};
++inline std::array<Enqueued, 256> enqueued;
++inline std::atomic<uint32_t>     enqueued_next {0};
++
++inline void NoteEnqueued(const void* commands) noexcept {
++	auto& entry = enqueued[enqueued_next.fetch_add(1, std::memory_order_relaxed) % enqueued.size()];
++	entry.commands.store(nullptr, std::memory_order_release);
++	entry.ns.store(NowNs(), std::memory_order_release);
++	entry.commands.store(commands, std::memory_order_release);
++}
++
++inline uint64_t EnqueuedTime(const void* commands) noexcept {
++	const auto next = enqueued_next.load(std::memory_order_acquire);
++	for (uint32_t back = 1; back <= enqueued.size(); back++) {
++		const auto& entry = enqueued[(next - back) % enqueued.size()];
++		if (entry.commands.load(std::memory_order_acquire) == commands) {
++			return entry.ns.load(std::memory_order_acquire);
++		}
++	}
++	return 0;
++}
++
++struct ProcessorTime {
++	std::atomic<const void*> processor {nullptr};
++	std::atomic<uint64_t>    ns {0};
++};
++inline std::array<ProcessorTime, 32> processors;
++
++inline std::atomic<uint64_t>* InputTime(const void* processor) noexcept {
++	if (processor == nullptr) return nullptr;
++	for (auto& entry: processors) {
++		const void* owner = entry.processor.load(std::memory_order_acquire);
++		if (owner == processor) return &entry.ns;
++		if (owner == nullptr) {
++			const void* expected = nullptr;
++			if (entry.processor.compare_exchange_strong(expected, processor, std::memory_order_acq_rel) ||
++			    expected == processor) {
++				return &entry.ns;
++			}
++		}
++	}
++	return nullptr;
++}
++
++inline void SetInputTime(const void* processor, uint64_t ns) noexcept {
++	if (auto* time = InputTime(processor); time != nullptr) time->store(ns, std::memory_order_release);
++}
++
++inline std::array<std::atomic<uint64_t>, 16384> operation_times;
++
++inline void NoteOperation(uint64_t sequence, const void* processor) noexcept {
++	const auto* time = InputTime(processor);
++	operation_times[sequence % operation_times.size()].store(time != nullptr ? time->load(std::memory_order_acquire) : 0,
++	                                                         std::memory_order_release);
++}
++
++inline uint64_t current_input_time = 0;
++inline uint64_t last_pass_ns       = 0;
++
++inline void BeginOperation(uint64_t sequence) noexcept {
++	current_input_time = sequence != 0 ? operation_times[sequence % operation_times.size()].load(std::memory_order_acquire) : 0;
++}
++
++inline std::mutex                                 written_mutex;
++inline std::vector<std::pair<uint64_t, uint64_t>> written_ranges;
++inline std::unordered_set<uint64_t>               written_pages;
++inline uint64_t                                   written_last_page = UINT64_MAX;
++inline bool                                       written_overflow  = false;
++
++inline void NoteEmulatorWrite(uint64_t vaddr, uint64_t size) noexcept {
++	if (size == 0 || !Enabled()) return;
++	const auto first = vaddr & ~(PageSize - 1);
++	const auto last  = (vaddr + size + PageSize - 1) & ~(PageSize - 1);
++	std::lock_guard lock(written_mutex);
++	if (written_overflow) return;
++	if (last - first > 16 * PageSize) {
++		if (written_ranges.size() >= 256) {
++			written_overflow = true;
++			return;
++		}
++		written_ranges.emplace_back(first, last - first);
++		return;
++	}
++	for (auto page = first; page < last; page += PageSize) {
++		if (page == written_last_page) continue;
++		written_last_page = page;
++		if (written_pages.size() >= 8192) {
++			written_overflow = true;
++			return;
++		}
++		written_pages.insert(page);
++	}
++}
++
++inline bool TakeWritten(std::vector<std::pair<uint64_t, uint64_t>>& out) {
++	std::lock_guard lock(written_mutex);
++	out.insert(out.end(), written_ranges.begin(), written_ranges.end());
++	written_ranges.clear();
++	for (const auto page: written_pages) out.emplace_back(page, PageSize);
++	written_pages.clear();
++	written_last_page = UINT64_MAX;
++	return std::exchange(written_overflow, false);
++}
++
++inline const std::vector<std::pair<uint64_t, uint64_t>>* stale_only = nullptr;
++
++inline std::vector<std::pair<uint64_t, uint64_t>> registered;
++inline bool                                       registered_lost = false;
++
++inline void NoteRegistered(uint64_t address, uint64_t size) {
++	if (!Enabled()) return;
++	if (registered.size() < 256) {
++		registered.emplace_back(address, size);
++	} else {
++		registered_lost = true;
++	}
++}
++
++inline bool TakeRegistered(std::vector<std::pair<uint64_t, uint64_t>>& out) {
++	out.insert(out.end(), registered.begin(), registered.end());
++	registered.clear();
++	return std::exchange(registered_lost, false);
++}
++
++inline std::atomic<uint64_t> skipped {0};
++inline std::atomic<uint64_t> synchronized_ranges {0};
++inline std::atomic<uint64_t> passes_later {0};
++inline std::atomic<uint64_t> passes_lost {0};
++inline std::atomic<uint64_t> passes_off {0};
++inline std::atomic<int64_t>  last_line {0};
++
++inline void Log() {
++	const auto now  = static_cast<int64_t>(NowNs());
++	auto       last = last_line.load(std::memory_order_relaxed);
++	if (last == 0) {
++		last_line.compare_exchange_strong(last, now, std::memory_order_relaxed);
++		return;
++	}
++	if (now - last < 10'000'000'000 || !last_line.compare_exchange_strong(last, now, std::memory_order_relaxed)) return;
++	const auto skips  = skipped.exchange(0, std::memory_order_relaxed);
++	const auto ranges = synchronized_ranges.exchange(0, std::memory_order_relaxed);
++	const auto later  = passes_later.exchange(0, std::memory_order_relaxed);
++	const auto lost   = passes_lost.exchange(0, std::memory_order_relaxed);
++	const auto off    = passes_off.exchange(0, std::memory_order_relaxed);
++	if (skips + later + lost + off == 0) return;
++	std::fprintf(stderr,
++	             "[kyty-bda-sync] summary of the last %.0f s: %llu full passes skipped for dispatches submitted before the "
++	             "last pass (%llu written or registered ranges synchronized instead); %llu full passes run: %llu for a "
++	             "dispatch submitted after the last pass, %llu after more writes or registrations than are listed, %llu "
++	             "with the skip switched off\n",
++	             static_cast<double>(now - last) / 1e9, static_cast<unsigned long long>(skips),
++	             static_cast<unsigned long long>(ranges), static_cast<unsigned long long>(later + lost + off),
++	             static_cast<unsigned long long>(later), static_cast<unsigned long long>(lost),
++	             static_cast<unsigned long long>(off));
++}
++
++}
+diff --git a/core/kyty/graphics/host_gpu/memoryTracker.h b/core/kyty/graphics/host_gpu/memoryTracker.h
+--- a/core/kyty/graphics/host_gpu/memoryTracker.h
++++ b/core/kyty/graphics/host_gpu/memoryTracker.h
+@@ -7,6 +7,7 @@
+ #include "graphics/host_gpu/rangeSet.h"
+ #include "graphics/host_gpu/regionManager.h"
+ 
++#include "source/util/small_vector.h"
+ #include <algorithm>
+ #include <atomic>
+ #include <memory>
+@@ -166,15 +167,15 @@
+ 	void ForEachCpuDirtySpan(uint64_t vaddr, uint64_t size, uint64_t max_gap, Func&& func) {
+ 		ValidateRange(vaddr, size);
+ 		const auto                                  end = vaddr + size;
+-		std::vector<std::pair<uint64_t, uint64_t>> spans;
++		spvtools::utils::SmallVector<std::pair<uint64_t, uint64_t>, 8> spans;
+ 		const auto add = [&](uint64_t begin, uint64_t finish) {
+ 			begin  = std::max(begin, vaddr);
+ 			finish = std::min(finish, end);
+ 			if (begin >= finish) {
+ 				return;
+ 			}
+-			if (!spans.empty() && begin <= spans.back().second + max_gap) {
+-				spans.back().second = finish;
++			if (!spans.empty() && begin <= spans[spans.size() - 1].second + max_gap) {
++				spans[spans.size() - 1].second = finish;
+ 			} else {
+ 				spans.emplace_back(begin, finish);
+ 			}
+diff --git a/core/kyty/graphics/host_gpu/renderer/cache/bufferCache.cpp b/core/kyty/graphics/host_gpu/renderer/cache/bufferCache.cpp
+--- a/core/kyty/graphics/host_gpu/renderer/cache/bufferCache.cpp
++++ b/core/kyty/graphics/host_gpu/renderer/cache/bufferCache.cpp
+@@ -1,3 +1,5 @@
++#include "graphics/host_gpu/renderer/protectionLane.h"
++#include "graphics/host_gpu/bdaSubmissionSync.h"
+ #include "regionBufferIndex.h"
+ #include "graphics/host_gpu/renderer/cache/bufferCache.h"
+ 
+@@ -204,6 +206,7 @@
+ 	if constexpr (insert) {
+ 		m_buffers.emplace(buffer.CpuAddress(), id);
+ 		m_register_epoch++;
++		BdaSubmissionSync::NoteRegistered(buffer.CpuAddress(), buffer.Size());
+ 		m_buffer_set_epoch++;
+ 		NoteBufferRegions(buffer, true);
+ 		m_total_used_memory += buffer.Size();
+@@ -657,6 +660,7 @@
+ 
+ void BufferCache::LogReadbackSummary() {
+ 	LogWriteBlockSummary();
++	BdaSubmissionSync::Log();
+ 	auto&      stats = g_readback_stats;
+ 	const auto now   = SteadyNs();
+ 	auto       last  = stats.last_line.load(std::memory_order_relaxed);
+@@ -1484,7 +1488,7 @@
+ 		}
+ 		return false;
+ 	}
+-	std::vector<vk::BufferCopy> copies;
++	spvtools::utils::SmallVector<vk::BufferCopy, 8> copies;
+ 	uint64_t                    total_size = 0;
+ 	vk::Buffer                  source;
+ 	const MemoryTracker::UploadScope upload_scope;
+@@ -1495,8 +1499,16 @@
+ 		    total_size += bytes;
+ 		    NoteUpload(address, bytes);
+ 	    },
+-	    [&]() noexcept { source = UploadCopies(buffer, copies, total_size); }, m_device_sync_pass);
+-	RecordBufferUpload(buffer, copies, source);
++	    [&]() noexcept { source = UploadCopies(buffer, {copies.data(),copies.size()}, total_size); }, m_device_sync_pass);
++	RecordBufferUpload(buffer, {copies.data(),copies.size()}, source);
++    static thread_local uint64_t observed = 0, small = 0, spill = 0, empty = 0;
++    if (copies.empty()) ++empty;
++    else if (copies.size() <= 8) ++small;
++    else ++spill;
++    if ((++observed & 65535u) == 0) {
++        std::fprintf(stderr, "[inline-upload] checks=%llu empty=%llu inline=%llu overflow=%llu\n",
++            (unsigned long long)observed,(unsigned long long)empty,(unsigned long long)small,(unsigned long long)spill);
++    }
+ 	if (is_texel_buffer && !is_written && !NoImageStartsAt(vaddr)) {
+ 		return SynchronizeBufferFromImage(buffer, vaddr, size);
+ 	}
+@@ -1596,6 +1608,7 @@
+ 	g_write_block_stats.uploaded.fetch_add(total_size, std::memory_order_relaxed);
+ 
+ 	auto*      host_copies = m_scheduler.HostCopies();
++	auto* protections = ProtectionLane::find(host_copies);
+ 	const auto ring        = m_staging_buffer.Mapped();
+ 	const bool hand_over   = host_copies != nullptr && m_staging_buffer.IsCoherent() &&
+ 	                         GuestGpu::IsGpuThread();
+@@ -1608,9 +1621,11 @@
+ 			for (const auto& copy: copies) {
+ 				queued = queued && LibKernel::Memory::FindBackingPointer(buffer.CpuAddress() + copy.dstOffset, copy.size) != nullptr;
+ 			}
+-			for (const auto& item: deferred) {
++			// Preserve the global protection order when this group must run synchronously.
++            if (!queued && protections && m_protect_jobs) protections->WaitFor(m_protect_jobs);
++            for (const auto& item: deferred) {
+ 				if (queued) {
+-					host_copies->Call(
++					(protections ? protections : host_copies)->Call(
+ 					    [](void* manager, uint64_t address, uint64_t size) {
+ 						    static_cast<RegionManager*>(manager)->ApplyDeferredProtection(address, size);
+ 					    },
+@@ -1620,7 +1635,11 @@
+ 				}
+ 			}
+ 			deferred.clear();
+-			if (queued) m_protect_jobs = host_copies->Flush();
++			if (queued) {
++                m_protect_jobs = protections ? ProtectionLane::publish(*host_copies,*protections) : host_copies->Flush();
++                static thread_local bool reported=false;
++                if(!reported){reported=true;std::fprintf(stderr,"[protection-lane] parallel=%u first_ticket=%" PRIu64 "\n",unsigned(protections!=nullptr),m_protect_jobs);}
++            }
+ 		}
+ 		for (auto& copy: copies) {
+ 			const auto  address = buffer.CpuAddress() + copy.dstOffset;
+@@ -1630,7 +1649,7 @@
+ 				host_copies->Copy(mapped + copy.srcOffset, backing, copy.size);
+ 			} else if (!in_ring || !QueueBackedUploadPieces(*host_copies, mapped + copy.srcOffset, address, copy.size)) {
+ 				if (m_protect_jobs != 0 && host_copies != nullptr) {
+-					host_copies->WaitFor(m_protect_jobs);
++					(protections ? protections : host_copies)->WaitFor(m_protect_jobs);
+ 					m_protect_jobs = 0;
+ 				}
+ 				if (!LibKernel::Memory::CopySparseMemory(address, mapped + copy.srcOffset, copy.size)) {
+@@ -1966,7 +1985,8 @@
+ 
+ void BufferCache::DrainHostCopies() {
+ 	if (auto* copies = m_scheduler.HostCopies(); copies != nullptr && GuestGpu::IsGpuThread()) {
+-		copies->Drain();
++		if (auto* protections = ProtectionLane::find(copies)) ProtectionLane::drain(*copies,*protections);
++        else copies->Drain();
+ 	}
+ }
+ 
+@@ -3574,6 +3594,19 @@
+ 
+ void BufferCache::SynchronizeBuffersInRanges(const RangeSet& ranges, bool all) {
+ 	const UploadBatch batch {*this};
++	if (const auto* stale = std::exchange(BdaSubmissionSync::stale_only, nullptr); stale != nullptr) {
++		for (const auto& [vaddr, size]: *stale) {
++			auto       begin = Common::AlignDown(vaddr, TRACKER_PAGE_SIZE);
++			const auto end   = Common::AlignUp(vaddr + size, TRACKER_PAGE_SIZE);
++			while (begin < end) {
++				const auto stop = std::min(end, Common::AlignDown(begin, TRACKER_REGION_SIZE) + TRACKER_REGION_SIZE);
++				ranges.ForEachInRange(begin, stop - begin,
++				                      [this](uint64_t start, uint64_t finish) { SynchronizeBuffersInRange(start, finish - start); });
++				begin = stop;
++			}
++		}
++		return;
++	}
+ 	const auto sync    = ++m_device_syncs;
+ 	m_device_sync_pass = sync;
+ 	(void)m_memory_tracker.TakeKeptPages();
+diff --git a/core/kyty/graphics/host_gpu/renderer/commandScheduler.cpp b/core/kyty/graphics/host_gpu/renderer/commandScheduler.cpp
+--- a/core/kyty/graphics/host_gpu/renderer/commandScheduler.cpp
++++ b/core/kyty/graphics/host_gpu/renderer/commandScheduler.cpp
+@@ -1,3 +1,4 @@
++#include "graphics/host_gpu/renderer/protectionLane.h"
+ #include "graphics/host_gpu/renderer/commandScheduler.h"
+ 
+ #include "common/assert.h"
+@@ -128,12 +129,14 @@
+ #endif
+ 		m_host_copies = std::make_unique<HostCopyQueue>(
+ 		    [] { Config::ConfigureGpuStageThread(Config::GpuStageThread::HostCopy); }, publish_large_copies);
++		ProtectionLane::open(m_host_copies.get());
+ 		m_recording_thread = std::jthread([this] { RecordingThread(); });
+ 	}
+ }
+ 
+ CommandScheduler::~CommandScheduler() {
+ 	Shutdown();
++	ProtectionLane::close(m_host_copies.get());
+ }
+ 
+ void CommandScheduler::Shutdown() {
+diff --git a/core/kyty/graphics/host_gpu/renderer/pipeline/descriptors.cpp b/core/kyty/graphics/host_gpu/renderer/pipeline/descriptors.cpp
+--- a/core/kyty/graphics/host_gpu/renderer/pipeline/descriptors.cpp
++++ b/core/kyty/graphics/host_gpu/renderer/pipeline/descriptors.cpp
+@@ -1,3 +1,6 @@
++#include <bit>
++#include <cstdio>
++#include "graphics/shader/recompiler/ir/rgbaSignedStorage.h"
+ #include "graphics/host_gpu/renderer/pipeline/descriptors.h"
+ 
+ #include "common/alignment.h"
+@@ -371,7 +374,7 @@
+ 	const bool encoding_ok   = IsCanonicalTextureEncoding(descriptor, resource.r128);
+ 	const bool uint_resource    = resource.numeric_class == Prospero::TextureNumericClass::Uint;
+ 	const bool raw_sint_storage = uint_resource &&
+-	    ShaderRecompiler::IR::RawSignedStorageFormat(resource, format) != Prospero::BufferFormat::kInvalid;
++	    ShaderRecompiler::IR::StorageFormatForSignedChannels(resource, format) != Prospero::BufferFormat::kInvalid;
+ 	const auto numeric_class =
+ 	    Prospero::SampledTextureNumericClass(Prospero::RemapTextureFormat(format));
+ 	const bool raw_float_atomic = format == Prospero::BufferFormat::k32Float && uint_resource &&
+@@ -426,7 +429,7 @@
+                                     Prospero::BufferFormat format, vk::Format pixel_format) {
+ 	if (resource.atomic64) return vk::Format::eR64Uint;
+ 	if (resource.atomic) return vk::Format::eR32Uint;
+-	const auto raw_sint_format = ShaderRecompiler::IR::RawSignedStorageFormat(resource, format);
++	const auto raw_sint_format = ShaderRecompiler::IR::StorageFormatForSignedChannels(resource, format);
+ 	if (raw_sint_format != Prospero::BufferFormat::kInvalid) return VulkanFormat(raw_sint_format);
+ 	return SrgbUnormViewFormat(pixel_format);
+ }
+diff --git a/core/kyty/graphics/host_gpu/renderer/pipeline/pipelineCache.cpp b/core/kyty/graphics/host_gpu/renderer/pipeline/pipelineCache.cpp
+--- a/core/kyty/graphics/host_gpu/renderer/pipeline/pipelineCache.cpp
++++ b/core/kyty/graphics/host_gpu/renderer/pipeline/pipelineCache.cpp
+@@ -1,3 +1,4 @@
++#include "graphics/shader/SpirvLoopFuel.h"
+ #include "graphics/host_gpu/renderer/pipeline/pipelineCache.h"
+ #if defined(ANYPS5_KYTY)
+ #include "graphics/host_gpu/renderer/pipeline/pipelineLibrary.h"
+@@ -1199,6 +1200,9 @@
+ 	const auto id = XXH3_64bits(inputs.bytes.data(), inputs.bytes.size());
+ 
+ 	const auto* stage = ShaderRecompiler::StageName(key.stage);
++	if (key.stage == ShaderType::Compute) {
++		(void)SpirvLoopFuel::Apply(result.spirv);
++	}
+ 	DumpShader(result.spirv, fmt::format("{}_{:016x}_{:016x}.spv", stage, key.hash, id));
+ 	ValidateShaderSpirv(stage, key.hash, result.spirv, profile.maintenance8);
+ 	ShaderModule module {
+diff --git a/core/kyty/graphics/host_gpu/renderer/pipeline/pipelineSerialization.cpp b/core/kyty/graphics/host_gpu/renderer/pipeline/pipelineSerialization.cpp
+--- a/core/kyty/graphics/host_gpu/renderer/pipeline/pipelineSerialization.cpp
++++ b/core/kyty/graphics/host_gpu/renderer/pipeline/pipelineSerialization.cpp
+@@ -1,3 +1,4 @@
++#include "graphics/shader/SpirvLoopFuel.h"
+ #include "graphics/host_gpu/renderer/pipeline/pipelineCache.h"
+ 
+ #include "common/logging/log.h"
+@@ -55,7 +56,7 @@
+ 				return static_cast<uint64_t>(parsed);
+ 			}
+ 		}
+-		return static_cast<uint64_t>(KYTY_SHADER_STORE_STAMP);
++		return static_cast<uint64_t>(KYTY_SHADER_STORE_STAMP) ^ SpirvLoopFuel::Stamp();
+ 	}();
+ 	return stamp;
+ }
+diff --git a/core/kyty/graphics/host_gpu/renderer/protectionLane.h b/core/kyty/graphics/host_gpu/renderer/protectionLane.h
+new file mode 100644
+--- /dev/null
++++ b/core/kyty/graphics/host_gpu/renderer/protectionLane.h
+@@ -0,0 +1,43 @@
++#pragma once
++#include "graphics/host_gpu/renderer/hostCopyQueue.h"
++#include <cstdio>
++#include <cstdlib>
++#include <map>
++#include <mutex>
++namespace Libs::Graphics::ProtectionLane {
++inline std::mutex mutex;
++inline std::map<HostCopyQueue*,std::unique_ptr<HostCopyQueue>> lanes;
++inline bool enabled() {
++    static const bool value=[] {const char* text=std::getenv("SAROS_PARALLEL_PROTECTION");return text && *text=='1';}();
++    return value;
++}
++inline void open(HostCopyQueue* copies) {
++    if(!copies || !enabled())return;
++    std::lock_guard lock(mutex);
++    lanes.emplace(copies,std::make_unique<HostCopyQueue>());
++}
++inline HostCopyQueue* find(HostCopyQueue* copies) {
++    if(!copies || !enabled())return nullptr;
++    std::lock_guard lock(mutex);
++    const auto it=lanes.find(copies);
++    return it==lanes.end()?nullptr:it->second.get();
++}
++inline uint64_t publish(HostCopyQueue& copies,HostCopyQueue& protections) {
++    const auto ticket=protections.Flush();
++    // All later staging reads and submission tickets follow this join in the copy FIFO.
++    copies.Call([](void* lane,uint64_t required,uint64_t){static_cast<HostCopyQueue*>(lane)->WaitFor(required);},&protections,ticket,0);
++    (void)copies.Flush();
++    return ticket;
++}
++inline void drain(HostCopyQueue& copies,HostCopyQueue& protections) {
++    protections.WaitFor(protections.Flush());
++    copies.WaitFor(copies.Flush());
++}
++inline void close(HostCopyQueue* copies) {
++    if(auto* protections=find(copies)) {
++        drain(*copies,*protections);
++        std::lock_guard lock(mutex);
++        lanes.erase(copies);
++    }
++}
++}
+diff --git a/core/kyty/graphics/host_gpu/renderer/renderContext.cpp b/core/kyty/graphics/host_gpu/renderer/renderContext.cpp
+--- a/core/kyty/graphics/host_gpu/renderer/renderContext.cpp
++++ b/core/kyty/graphics/host_gpu/renderer/renderContext.cpp
+@@ -1,3 +1,10 @@
++#ifdef _WIN32
++#ifndef NOMINMAX
++#define NOMINMAX
++#endif
++#include <windows.h>
++#endif
++#include "graphics/host_gpu/bdaSubmissionSync.h"
+ #include "loader/demonsSoulsTitle.h"
+ #include "graphics/host_gpu/renderer/renderContext.h"
+ 
+@@ -80,20 +87,32 @@
+ 
+ void RenderContext::ShutdownGpu() {
+ 	if (m_gpu != nullptr) {
+-		m_gpu->Shutdown();
+-		m_gpu.reset();
++        m_gpu->Shutdown();
+ 	}
+ 	if (m_video_out != nullptr) {
+ 		if (m_command_scheduler.Active()) {
+ 			m_command_scheduler.Finish();
+ 		}
+-		m_command_scheduler.DrainPriorityOperations();
+-		m_video_out = nullptr;
+-	}
++        m_command_scheduler.DrainPriorityOperations();
++        m_video_out = nullptr;
++    }
++    // A final submission can call GetGpu while draining its frame updates.
++    // The guest worker has stopped, but these callbacks still borrow the object.
++    m_gpu.reset();
+ }
+ 
+ GuestGpu& RenderContext::GetGpu() const {
+-	EXIT_IF(m_gpu == nullptr);
++	if (!m_gpu) {
++#ifdef _WIN32
++        void* frames[18]{};
++        const auto count=CaptureStackBackTrace(0,18,frames,nullptr);
++        const auto base=reinterpret_cast<uintptr_t>(GetModuleHandleW(L"kyty_gpu.prx"));
++        std::fprintf(stderr,"[late-gpu-use] count=%u",unsigned(count));
++        for(unsigned i=0;i<count;++i) std::fprintf(stderr," %llx",(unsigned long long)(reinterpret_cast<uintptr_t>(frames[i])-base));
++        std::fprintf(stderr,"\n");
++#endif
++    }
++    EXIT_IF(m_gpu == nullptr);
+ 	return *m_gpu;
+ }
+ 
+@@ -118,6 +137,7 @@
+ 	}
+ 	if (access == PageFaultAccess::Write && GuestGpu::IsGpuThread()) {
+ 		m_bda_generation++;
++		BdaSubmissionSync::NoteEmulatorWrite(fault_vaddr, 1);
+ 	}
+ 	if (access == PageFaultAccess::Write) {
+ 		const auto owner   = m_buffer_cache.InvalidateFaultedPage(fault_vaddr);
+@@ -1259,12 +1279,35 @@
+ 	if (full_sync && (epochs != m_bda_sync_epochs || m_buffer_cache.HasKeptPages()) &&
+ 	    (!same_layout || m_bda_synced_generation != m_bda_generation)) {
+ 		m_bda_synced_generation = m_bda_generation;
++		std::vector<std::pair<uint64_t, uint64_t>> stale;
++		const bool overflow = BdaSubmissionSync::TakeWritten(stale);
++		const bool lost     = BdaSubmissionSync::TakeRegistered(stale);
++		const bool earlier  = BdaSubmissionSync::current_input_time != 0 &&
++		                      BdaSubmissionSync::current_input_time < BdaSubmissionSync::last_pass_ns;
++		const bool skip     = BdaSubmissionSync::Enabled() && !overflow && !lost && earlier;
++		const auto started  = BdaSubmissionSync::NowNs();
+ 		for (const auto& [vaddr, size]: m_bda_mapped_since_sync) {
+ 			m_buffer_cache.ForceSynchronization(vaddr, size);
++			if (skip) stale.emplace_back(vaddr, size);
+ 		}
+ 		m_bda_mapped_since_sync.clear();
+-		m_buffer_cache.SynchronizeBuffersInRanges(m_mapped_ranges, false);
+-		m_bda_sync_epochs = epochs;
++		if (skip) {
++			if (!stale.empty()) {
++				BdaSubmissionSync::stale_only = &stale;
++				m_buffer_cache.SynchronizeBuffersInRanges(m_mapped_ranges, false);
++			}
++			m_bda_sync_epochs[1] = epochs[1];
++			m_bda_sync_epochs[2] = epochs[2];
++			BdaSubmissionSync::skipped.fetch_add(1, std::memory_order_relaxed);
++			BdaSubmissionSync::synchronized_ranges.fetch_add(stale.size(), std::memory_order_relaxed);
++		} else {
++			(!BdaSubmissionSync::Enabled() ? BdaSubmissionSync::passes_off
++			                               : overflow || lost ? BdaSubmissionSync::passes_lost : BdaSubmissionSync::passes_later)
++			    .fetch_add(1, std::memory_order_relaxed);
++			m_buffer_cache.SynchronizeBuffersInRanges(m_mapped_ranges, false);
++			m_bda_sync_epochs               = epochs;
++			BdaSubmissionSync::last_pass_ns = started;
++		}
+ 	}
+ 	m_fault_process_pending = true;
+ 	m_use_scan_pending      = true;
+diff --git a/core/kyty/graphics/shader/SpirvLoopFuel.h b/core/kyty/graphics/shader/SpirvLoopFuel.h
+new file mode 100644
+--- /dev/null
++++ b/core/kyty/graphics/shader/SpirvLoopFuel.h
+@@ -0,0 +1,319 @@
++#pragma once
++
++#include <algorithm>
++#include <cstdint>
++#include <cstdlib>
++#include <unordered_map>
++#include <vector>
++
++namespace Libs::Graphics::SpirvLoopFuel {
++
++inline uint32_t Budget() noexcept {
++	static const uint32_t budget = [] {
++		const char* value = std::getenv("KYTY_LOOP_FUEL");
++		if (value == nullptr) return uint32_t {1} << 26u;
++		return static_cast<uint32_t>(std::strtoul(value, nullptr, 0));
++	}();
++	return budget;
++}
++
++inline uint32_t SmallestLoop() noexcept {
++	static const uint32_t smallest = [] {
++		const char* value = std::getenv("KYTY_LOOP_FUEL_MIN");
++		if (value == nullptr) return uint32_t {0};
++		return static_cast<uint32_t>(std::strtoul(value, nullptr, 0));
++	}();
++	return smallest;
++}
++
++inline bool GuardsRayWalks() noexcept {
++	static const bool guards = [] {
++		const char* value = std::getenv("KYTY_LOOP_FUEL_RAY_WALKS");
++		return value != nullptr && value[0] == '1';
++	}();
++	return guards;
++}
++
++inline uint64_t Stamp() noexcept {
++	if (Budget() == 0) return 0;
++	return (uint64_t {Budget()} * 0x9e3779b97f4a7c15ull) ^ (uint64_t {SmallestLoop()} << 40u) ^
++	       (GuardsRayWalks() ? 0ull : 0x52a7c0deull << 8u);
++}
++
++inline bool Enabled() noexcept {
++	return Budget() != 0;
++}
++
++inline bool Apply(std::vector<uint32_t>& words) {
++	constexpr uint32_t OpEntryPoint       = 15;
++	constexpr uint32_t OpTypeBool         = 20;
++	constexpr uint32_t OpTypeInt          = 21;
++	constexpr uint32_t OpTypeVoid         = 19;
++	constexpr uint32_t OpTypePointer      = 32;
++	constexpr uint32_t OpConstant         = 43;
++	constexpr uint32_t OpConstantNull     = 46;
++	constexpr uint32_t OpFunction         = 54;
++	constexpr uint32_t OpVariable         = 59;
++	constexpr uint32_t OpLoad             = 61;
++	constexpr uint32_t OpStore            = 62;
++	constexpr uint32_t OpISub             = 130;
++	constexpr uint32_t OpSelect           = 169;
++	constexpr uint32_t OpULessThan        = 176;
++	constexpr uint32_t OpPhi              = 245;
++	constexpr uint32_t OpLoopMerge        = 246;
++	constexpr uint32_t OpSelectionMerge   = 247;
++	constexpr uint32_t OpLabel            = 248;
++	constexpr uint32_t OpBranch           = 249;
++	constexpr uint32_t OpBranchConditional = 250;
++	constexpr uint32_t OpReturn           = 253;
++	constexpr uint32_t OpReturnValue      = 254;
++	constexpr uint32_t OpGroupFirst       = 333;
++	constexpr uint32_t OpGroupLast        = 366;
++	constexpr uint32_t OpRayQueryProceed  = 4477;
++	constexpr uint32_t StoragePrivate     = 6;
++
++	if (!Enabled() || words.size() < 5) return false;
++
++	struct Instruction {
++		size_t   at;
++		uint32_t opcode;
++		uint32_t count;
++	};
++	std::vector<Instruction> instructions;
++	for (size_t at = 5; at < words.size();) {
++		const uint32_t count = words[at] >> 16u;
++		if (count == 0 || at + count > words.size()) return false;
++		instructions.push_back({at, words[at] & 0xffffu, count});
++		at += count;
++	}
++
++	uint32_t uint_type    = 0;
++	uint32_t bool_type    = 0;
++	uint32_t pointer_type = 0;
++	size_t   first_function = instructions.size();
++	std::unordered_map<uint32_t, bool> void_types;
++	for (size_t i = 0; i < instructions.size(); ++i) {
++		const auto& in = instructions[i];
++		const auto* w  = words.data() + in.at;
++		if (in.opcode == OpTypeInt && in.count == 4 && w[2] == 32 && w[3] == 0 && uint_type == 0) uint_type = w[1];
++		if (in.opcode == OpTypeBool && bool_type == 0) bool_type = w[1];
++		if (in.opcode == OpTypeVoid) void_types[w[1]] = true;
++		if (in.opcode == OpFunction && first_function == instructions.size()) first_function = i;
++	}
++	if (first_function == instructions.size()) return false;
++	for (size_t i = 0; i < first_function; ++i) {
++		const auto& in = instructions[i];
++		const auto* w  = words.data() + in.at;
++		if (in.opcode == OpTypePointer && w[2] == StoragePrivate && uint_type != 0 && w[3] == uint_type) pointer_type = w[1];
++	}
++
++	struct Edge {
++		uint32_t target;
++		uint32_t check;
++		uint32_t leave;
++		uint32_t join;
++		uint32_t loaded;
++		uint32_t spent;
++		uint32_t left;
++		uint32_t kept;
++	};
++	struct Loop {
++		size_t            terminator;
++		uint32_t          header;
++		uint32_t          cost;
++		uint32_t          return_type;
++		std::vector<Edge> edges;
++		size_t            first = 0;
++		size_t            last  = 0;
++		bool              walk  = false;
++		bool              spare = false;
++	};
++	std::vector<Loop> loops;
++	uint32_t          bound = words[3];
++	const auto        fresh = [&bound] { return bound++; };
++
++	std::unordered_map<uint32_t, size_t> label_index;
++	for (size_t i = first_function; i < instructions.size(); ++i) {
++		if (instructions[i].opcode == OpLabel) label_index[words[instructions[i].at + 1]] = i;
++	}
++	uint32_t return_type = 0;
++	uint32_t block       = 0;
++	size_t   block_index = 0;
++	for (size_t i = first_function; i + 1 < instructions.size(); ++i) {
++		const auto& in = instructions[i];
++		const auto* w  = words.data() + in.at;
++		if (in.opcode == OpFunction) return_type = w[1];
++		if (in.opcode == OpLabel) {
++			block       = w[1];
++			block_index = i;
++		}
++		if (in.opcode != OpLoopMerge) continue;
++		const uint32_t merge    = w[1];
++		const uint32_t carry_on = w[2];
++		if (carry_on == block) continue;
++		const auto& next = instructions[i + 1];
++		const auto* t    = words.data() + next.at;
++		std::vector<uint32_t> targets;
++		if (next.opcode == OpBranch) {
++			targets.push_back(t[1]);
++		} else if (next.opcode == OpBranchConditional) {
++			if (t[2] == t[3]) continue;
++			if (t[2] != merge) targets.push_back(t[2]);
++			if (t[3] != merge) targets.push_back(t[3]);
++		} else {
++			continue;
++		}
++		if (targets.empty() || std::ranges::find(targets, block) != targets.end()) continue;
++		const auto merge_at = label_index.find(merge);
++		const auto size     = merge_at != label_index.end() && merge_at->second > block_index
++		                          ? static_cast<uint32_t>(merge_at->second - block_index)
++		                          : 64u;
++		if (size < SmallestLoop()) continue;
++		Loop loop {.terminator = i + 1, .header = block, .cost = std::max(size, 8u), .return_type = return_type};
++		if (merge_at != label_index.end() && merge_at->second > block_index) {
++			loop.first = block_index;
++			loop.last  = merge_at->second;
++		}
++		for (const auto target: targets) {
++			loop.edges.push_back({target, fresh(), fresh(), fresh(), fresh(), fresh(), fresh(), fresh()});
++		}
++		loops.push_back(std::move(loop));
++	}
++	if (!GuardsRayWalks()) {
++		for (size_t i = first_function; i < instructions.size(); ++i) {
++			if (instructions[i].opcode != OpRayQueryProceed) continue;
++			Loop* innermost = nullptr;
++			for (auto& loop: loops) {
++				if (loop.first < i && i < loop.last && (innermost == nullptr || loop.first > innermost->first)) innermost = &loop;
++			}
++			if (innermost != nullptr) innermost->walk = true;
++		}
++		for (auto& loop: loops) {
++			if (loop.walk || loop.last == 0) continue;
++			bool inside = false;
++			for (const auto& outer: loops) {
++				inside = inside || (outer.walk && outer.first < loop.first && loop.last <= outer.last);
++			}
++			if (!inside) continue;
++			loop.spare = true;
++			for (size_t i = loop.first; i < loop.last; ++i) {
++				if (instructions[i].opcode >= OpGroupFirst && instructions[i].opcode <= OpGroupLast) loop.spare = false;
++			}
++		}
++		std::erase_if(loops, [](const Loop& loop) { return loop.walk || loop.spare; });
++	}
++	if (loops.empty()) return false;
++
++	std::vector<uint32_t> globals;
++	const auto emit = [](std::vector<uint32_t>& out, uint32_t opcode, std::initializer_list<uint32_t> operands) {
++		out.push_back((static_cast<uint32_t>(operands.size() + 1) << 16u) | opcode);
++		out.insert(out.end(), operands);
++	};
++	if (bool_type == 0) {
++		bool_type = fresh();
++		emit(globals, OpTypeBool, {bool_type});
++	}
++	if (uint_type == 0) {
++		uint_type = fresh();
++		emit(globals, OpTypeInt, {uint_type, 32, 0});
++	}
++	if (pointer_type == 0) {
++		pointer_type = fresh();
++		emit(globals, OpTypePointer, {pointer_type, StoragePrivate, uint_type});
++	}
++	const uint32_t budget = fresh();
++	const uint32_t zero   = fresh();
++	const uint32_t fuel   = fresh();
++	emit(globals, OpConstant, {uint_type, budget, Budget()});
++	emit(globals, OpConstant, {uint_type, zero, 0});
++	std::unordered_map<uint32_t, uint32_t> costs;
++	std::unordered_map<uint32_t, uint32_t> nulls;
++	for (const auto& loop: loops) {
++		if (!costs.contains(loop.cost)) {
++			const auto id = fresh();
++			costs[loop.cost] = id;
++			emit(globals, OpConstant, {uint_type, id, loop.cost});
++		}
++		if (!void_types.contains(loop.return_type) && !nulls.contains(loop.return_type)) {
++			const auto id = fresh();
++			nulls[loop.return_type] = id;
++			emit(globals, OpConstantNull, {loop.return_type, id});
++		}
++	}
++	emit(globals, OpVariable, {pointer_type, fuel, StoragePrivate, budget});
++
++	std::unordered_map<size_t, const Loop*> by_terminator;
++	std::unordered_map<uint64_t, uint32_t>  phi_parents;
++	for (const auto& loop: loops) {
++		by_terminator[loop.terminator] = &loop;
++		for (const auto& edge: loop.edges) {
++			phi_parents[(uint64_t {edge.target} << 32u) | loop.header] = edge.join;
++		}
++	}
++
++	const bool            interface_all = words[1] >= 0x00010400u;
++	std::vector<uint32_t> out(words.begin(), words.begin() + 5);
++	out.reserve(words.size() + globals.size() + loops.size() * 40);
++	block = 0;
++	for (size_t i = 0; i < instructions.size(); ++i) {
++		const auto& in = instructions[i];
++		const auto* w  = words.data() + in.at;
++		if (i == first_function) out.insert(out.end(), globals.begin(), globals.end());
++		if (in.opcode == OpEntryPoint && interface_all) {
++			out.push_back(((in.count + 1) << 16u) | OpEntryPoint);
++			out.insert(out.end(), w + 1, w + in.count);
++			out.push_back(fuel);
++			continue;
++		}
++		if (in.opcode == OpLabel) block = w[1];
++		if (in.opcode == OpPhi) {
++			const auto start = out.size();
++			out.insert(out.end(), w, w + in.count);
++			for (uint32_t operand = 4; operand < in.count; operand += 2) {
++				const auto found = phi_parents.find((uint64_t {block} << 32u) | w[operand]);
++				if (found != phi_parents.end()) out[start + operand] = found->second;
++			}
++			continue;
++		}
++		const auto found = by_terminator.find(i);
++		if (found == by_terminator.end()) {
++			out.insert(out.end(), w, w + in.count);
++			continue;
++		}
++		const auto& loop  = *found->second;
++		const auto  start = out.size();
++		out.insert(out.end(), w, w + in.count);
++		for (const auto& edge: loop.edges) {
++			if (in.opcode == OpBranch) {
++				out[start + 1] = edge.check;
++			} else {
++				if (w[2] == edge.target) out[start + 2] = edge.check;
++				if (w[3] == edge.target) out[start + 3] = edge.check;
++			}
++		}
++		for (const auto& edge: loop.edges) {
++			const auto cost = costs[loop.cost];
++			emit(out, OpLabel, {edge.check});
++			emit(out, OpLoad, {uint_type, edge.loaded, fuel});
++			emit(out, OpULessThan, {bool_type, edge.spent, edge.loaded, cost});
++			emit(out, OpISub, {uint_type, edge.left, edge.loaded, cost});
++			emit(out, OpSelect, {uint_type, edge.kept, edge.spent, zero, edge.left});
++			emit(out, OpStore, {fuel, edge.kept});
++			emit(out, OpSelectionMerge, {edge.join, 0});
++			emit(out, OpBranchConditional, {edge.spent, edge.leave, edge.join});
++			emit(out, OpLabel, {edge.leave});
++			if (void_types.contains(loop.return_type)) {
++				emit(out, OpReturn, {});
++			} else {
++				emit(out, OpReturnValue, {nulls[loop.return_type]});
++			}
++			emit(out, OpLabel, {edge.join});
++			emit(out, OpBranch, {edge.target});
++		}
++	}
++	out[3] = bound;
++	words  = std::move(out);
++	return true;
++}
++
++}
+diff --git a/core/kyty/graphics/shader/recompiler/backend/spirv/spirvEmitterImage.cpp b/core/kyty/graphics/shader/recompiler/backend/spirv/spirvEmitterImage.cpp
+--- a/core/kyty/graphics/shader/recompiler/backend/spirv/spirvEmitterImage.cpp
++++ b/core/kyty/graphics/shader/recompiler/backend/spirv/spirvEmitterImage.cpp
+@@ -1,3 +1,6 @@
++#include <bit>
++#include <cstdio>
++#include "graphics/shader/recompiler/ir/rgbaSignedStorage.h"
+ #include "graphics/guest_gpu/gpu_format.h"
+ #include "graphics/shader/recompiler/backend/spirv/spirvEmitterInstructions.h"
+ #include "graphics/shader/recompiler/frontend/decode/ImageOps.h"
+@@ -415,7 +418,7 @@
+ 	if (format == Prospero::BufferFormat::kInvalid) return {};
+ 	const auto info = Format::GetFormatInfo(format);
+ 	if (IR::ReadsDepthBits(image)) return info;
+-	const bool raw_signed = IR::RawSignedStorageFormat(image, format) != Prospero::BufferFormat::kInvalid;
++	const bool raw_signed = IR::StorageFormatForSignedChannels(image, format) != Prospero::BufferFormat::kInvalid;
+ 	EXIT_IF((Prospero::RemapTextureFormat(format) == format && !raw_signed) || info.component_count == 0u ||
+ 	        info.component_count > 4u);
+ 	EXIT_IF(!raw_signed && info.type != Format::ComponentType::Uscaled &&
+@@ -482,6 +485,29 @@
+                           bool exact = false) {
+ 	const auto info = ImageConversionFormat(ctx.state, mem);
+ 	if (info.format == Prospero::BufferFormat::kInvalid) return DecodeSrgb(ctx.state, mem, texel);
++    if (info.format == Prospero::BufferFormat::k16_16_16_16SInt) {
++        const auto& image = ctx.state.program.info.images[mem.resource];
++        EXIT_IF(image.numeric_class != Prospero::TextureNumericClass::Uint || image.atomic);
++        uint32_t signedChannels[4]{};
++        for (uint32_t channel = 0; channel < 4; ++channel) {
++            const auto selector = (image.shader_swizzle >> (3u * channel)) & 7u;
++            if (selector < 4u) {
++                signedChannels[channel] = ConstantI32(ctx.state, selector == 1u ? 1 : 0);
++                continue;
++            }
++            const auto raw = ctx.state.builder.AllocateId();
++            ctx.state.builder.AddFunction(spv::OpCompositeExtract, TypeU32(ctx.state), raw, texel, selector - 4u);
++            const auto source = Unary(ctx.state, spv::OpBitcast, TypeI32(ctx.state), raw);
++            const auto extended = ctx.state.builder.AllocateId();
++            ctx.state.builder.AddFunction(spv::OpBitFieldSExtract, TypeI32(ctx.state), extended, source,
++                                          ConstantU32(ctx.state, 0u), ConstantU32(ctx.state, 16u));
++            signedChannels[channel] = extended;
++        }
++        const auto result = ctx.state.builder.AllocateId();
++        ctx.state.builder.AddFunction(spv::OpCompositeConstruct, ImageVectorType(ctx.state, Prospero::TextureNumericClass::Sint, 4u),
++                                      result, signedChannels[0], signedChannels[1], signedChannels[2], signedChannels[3]);
++        return result;
++    }
+ 
+ 	const auto numeric_class = ctx.state.program.info.images[mem.resource].numeric_class;
+ 	const auto scalar_type   = ImageScalarType(ctx.state, numeric_class);
+diff --git a/core/kyty/graphics/shader/recompiler/ir/passes/ResourceMaterialization.cpp b/core/kyty/graphics/shader/recompiler/ir/passes/ResourceMaterialization.cpp
+--- a/core/kyty/graphics/shader/recompiler/ir/passes/ResourceMaterialization.cpp
++++ b/core/kyty/graphics/shader/recompiler/ir/passes/ResourceMaterialization.cpp
+@@ -1,3 +1,6 @@
++#include <bit>
++#include <cstdio>
++#include "graphics/shader/recompiler/ir/rgbaSignedStorage.h"
+ #include "graphics/shader/recompiler/ir/passes/ResourceMaterialization.h"
+ 
+ #include "common/alignment.h"
+@@ -1647,7 +1650,12 @@
+ 		if (storage || image.conversion_format != Prospero::BufferFormat::kInvalid) {
+ 			image.shader_swizzle = DescriptorImageSwizzle(descriptor);
+ 		}
+-		const auto raw_sint_format = RawSignedStorageFormat(base, format);
++		const auto raw_sint_format = StorageFormatForSignedChannels(base, format);
++        if (format == Prospero::BufferFormat::k16_16_16_16SInt && storage) {
++            static thread_local uint64_t calls=0;
++            if (std::has_single_bit(++calls)) std::fprintf(stderr, "[rgba16s-storage] count=%llu read=%u written=%u atomic=%u raw=%u\n",
++              (unsigned long long)calls,unsigned(base.read),unsigned(base.written),unsigned(base.atomic),unsigned(raw_sint_format));
++        }
+ 		const bool raw_sint_storage = raw_sint_format != Prospero::BufferFormat::kInvalid;
+ 		if (raw_sint_storage && raw_sint_format != Prospero::BufferFormat::k32UInt)
+ 			image.conversion_format = format;
+diff --git a/core/kyty/graphics/shader/recompiler/ir/rgbaSignedStorage.h b/core/kyty/graphics/shader/recompiler/ir/rgbaSignedStorage.h
+new file mode 100644
+--- /dev/null
++++ b/core/kyty/graphics/shader/recompiler/ir/rgbaSignedStorage.h
+@@ -0,0 +1,10 @@
++#pragma once
++#include "graphics/shader/recompiler/ir/ShaderIR.h"
++namespace Libs::Graphics::ShaderRecompiler::IR {
++[[nodiscard]] constexpr Prospero::BufferFormat StorageFormatForSignedChannels(const ImageResource& image, Prospero::BufferFormat format) {
++    if (image.resource_class == ImageResourceClass::Storage && image.written && !image.atomic &&
++        format == Prospero::BufferFormat::k16_16_16_16SInt)
++        return Prospero::BufferFormat::k16_16_16_16UInt;
++    return RawSignedStorageFormat(image, format);
++}
++}
+diff --git a/core/libs/prx/libSceAgcDriver/KytyShim/src/MemoryGpu.cpp b/core/libs/prx/libSceAgcDriver/KytyShim/src/MemoryGpu.cpp
+--- a/core/libs/prx/libSceAgcDriver/KytyShim/src/MemoryGpu.cpp
++++ b/core/libs/prx/libSceAgcDriver/KytyShim/src/MemoryGpu.cpp
+@@ -1,3 +1,4 @@
++#include "graphics/host_gpu/bdaSubmissionSync.h"
+ #include "kernel/memory.h"
+ 
+ #include "MemoryShim.hpp"
+@@ -61,6 +62,7 @@
+ void NoteEmulatorWrite(uint64_t vaddr, uint64_t size) {
+ 	if (g_gpu_resources != nullptr) {
+ 		g_gpu_resources->GetBufferCache().NoteHostWrite(vaddr, size);
++		Libs::Graphics::BdaSubmissionSync::NoteEmulatorWrite(vaddr, size);
+ 		g_gpu_resources->GetTextureCache().NoteMetadataWrite(vaddr, size);
+ 		g_gpu_resources->GetStrictWatch().InvalidateMemory(vaddr, size);
+ 	}

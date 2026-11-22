@@ -1,7 +1,8 @@
-"""Start an assembled Windows installation with the 30.96 FPS milestone settings."""
+"""Launch Saros on Windows with a measured gameplay profile."""
 import argparse
 import hashlib
 import json
+import mmap
 import os
 from pathlib import Path
 import subprocess
@@ -23,8 +24,8 @@ VIDEO = {
 }
 
 
-def settings(text):
-    sections = {"ScalabilityGroups": GROUPS, "/Script/Guest.GuestGameUserSettings": VIDEO}
+def settings(text, groups=GROUPS, video=VIDEO):
+    sections = {"ScalabilityGroups": groups, "/Script/Guest.GuestGameUserSettings": video}
     added = set()
     skip = set()
     lines = []
@@ -50,11 +51,18 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--play", type=Path, required=True, help="Installation containing Saros.exe, libs and app0")
     parser.add_argument("--check", action="store_true", help="Verify the launch inputs and exit")
+    profiles = {"native-fxaa": "SarosNativeFXAA", "interpolation": "SarosInterpolated",
+                "retail-interpolation": "SarosRetailInterpolation"}
+    parser.add_argument("--profile", choices=profiles, help="Use a profile from the optional presentation experiment")
     args = parser.parse_args()
     play = args.play.resolve(strict=True)
     expected = json.loads((HERE / "guest-files.json").read_text(encoding="utf-8"))
     expected["app0/guest/content/paks/pakchunk0-ps5_3_P.pak"] = "c09fed1d7b8634e2f5fe7495a2230ea456e32792a472656c93bea3ff5a1957b0"
+    if args.profile:
+        expected["app0/guest/content/paks/pakchunk0-ps5_5_P.pak"] = "283e8065dd5ac01dc1aaf2efcdc43b0902770204ff14980278dff6b676742af6"
     for name, digest in expected.items():
+        if not (play / name).is_file():
+            parser.error(f"Missing installation file {name}")
         with (play / name).open("rb") as stream:
             if hashlib.file_digest(stream, "sha256").hexdigest() != digest:
                 parser.error(f"Unexpected contents of {name}")
@@ -64,7 +72,17 @@ def main():
             parser.error(f"Missing installation file {name}")
     directory = play / GUEST_CONFIG.lstrip("/")
     original = directory / "gameusersettings.ini"
-    text = settings(original.read_text(encoding="utf-8-sig") if original.exists() else "")
+    groups = GROUPS.copy()
+    video = VIDEO.copy()
+    if args.profile:
+        from experiments.interpolation.windowed_client import run_windowed
+        with (play / "libs/kyty_gpu.prx").open("rb") as stream, mmap.mmap(stream.fileno(), 0, access=mmap.ACCESS_READ) as image:
+            if image.find(b"[rgba16s-storage]") == -1:
+                parser.error("Install the renderer built with the presentation experiment patch")
+        for group in ("Shadow", "GlobalIllumination", "Reflection", "Effects"):
+            groups[f"sg.{group}Quality"] = "0"
+        video["bUseVSync"] = "False"
+    text = settings(original.read_text(encoding="utf-8-sig") if original.exists() else "", groups, video)
     if args.check:
         print("Verified the guest images, native display profile and required launch paths.")
         return 0
@@ -72,12 +90,20 @@ def main():
     env = {k: v for k, v in os.environ.items() if not k.upper().startswith(("ANYPS5_", "APS5_", "KYTY_", "SAROS_"))}
     env.update(json.loads((HERE / "30fps-environment.json").read_text(encoding="utf-8")))
     env["ANYPS5_SHADER_CACHE_DIR"] = str(play / "shader_cache")
-    with tempfile.NamedTemporaryFile(dir=directory, prefix="saros-30fps-", suffix=".ini", delete=False) as stream:
+    if args.profile:
+        env.update(ANYPS5_FULLSCREEN="windowed", SAROS_EXCLUSIVE_1440P120="0", KYTY_PRESENT_MODE="immediate",
+                   KYTY_GPU_THREAD_CPUS="off", KYTY_BDA_REGIONS="0", SAROS_PARALLEL_PROTECTION="1")
+        if args.profile == "retail-interpolation":
+            env.pop("APS5_SAROS_NATIVE_1440P", None)
+    with tempfile.NamedTemporaryFile(dir=directory, prefix="saros-gameplay-", suffix=".ini", delete=False) as stream:
         config = Path(stream.name)
     try:
         config.write_text(text, encoding="utf-8")
         cmd = [play / "Saros.exe", "-NoSplash", "-NoMovie", "-ResX=2560", "-ResY=1440",
                f"-GameUserSettingsINI={GUEST_CONFIG}/{config.name}"]
+        if args.profile:
+            cmd.append("-DeviceProfile=" + profiles[args.profile])
+            return run_windowed(cmd, play, env)
         return subprocess.run(cmd, cwd=play, env=env).returncode
     finally:
         config.unlink(missing_ok=True)

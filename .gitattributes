@@ -1,2 +1,3 @@
 # Preserve the byte hashes checked by the renderer source manifest.
 windows/renderer/** -text
+windows/experiments/interpolation/*.patch -text -whitespace

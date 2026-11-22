@@ -1,0 +1,66 @@
+{
+  "core/kyty/CMakeLists.txt": {
+    "before": "16253931e1f5d48fc437c9b141fb70bb00d6f9a6caa472bb927b0a7f2d08a463",
+    "after": "f3055091419ca5105fb10adc8d60e9defc95b03bf4d4083cf22fb0ab61612cc8"
+  },
+  "core/kyty/graphics/guest_gpu/graphicsRun.cpp": {
+    "before": "ad060e6d1444def674ed8939a9a22b8e6abd2f4f7848c8544b23ee1a312704cb",
+    "after": "caae3187483a25dfac2d2840b3fa0a03ea605507a470ab635b31ccbf9b7f927c"
+  },
+  "core/kyty/graphics/host_gpu/bdaSubmissionSync.h": {
+    "before": null,
+    "after": "74a45266774ddd9edd0cfeabb3db084598d0d90afcc8cb4b0cef3725afb02756"
+  },
+  "core/kyty/graphics/host_gpu/memoryTracker.h": {
+    "before": "9f558d6556d8773c74699a2c08b9b4d48d86f980031aa5bd564be4a72aac1598",
+    "after": "03f1fa0410a777f611b998f10c087c2013e0becd272ee7e4186214807e3af643"
+  },
+  "core/kyty/graphics/host_gpu/renderer/cache/bufferCache.cpp": {
+    "before": "0ca397e0c7d75add823cb5751ba626ff3faa1881d1f5901b155cdbc68189a8ac",
+    "after": "970839c025047e42986ed7deff1f3ed5ff80dc1bafe5e81e8dda09fc22e9ba27"
+  },
+  "core/kyty/graphics/host_gpu/renderer/commandScheduler.cpp": {
+    "before": "f2ba2c56f0bef7e50ac010f5ddfa13b22142fcda8b16b8d5d6303c88efd61a82",
+    "after": "023050bc6f9a7aac3ddbeb25e35101f5aaf6af570b8a7d7099df3df4dc16f2a4"
+  },
+  "core/kyty/graphics/host_gpu/renderer/pipeline/descriptors.cpp": {
+    "before": "c5a8741fb7998b72020b679f0c7bd91cba831944364feb97f54dc32f1cac065c",
+    "after": "d7a8539e1181905ddc215156367da0b77015879cf16961d2f2467582b3fedc8b"
+  },
+  "core/kyty/graphics/host_gpu/renderer/pipeline/pipelineCache.cpp": {
+    "before": "649bcc9c8ef35544f26073417ce1acc83868fb12c4a912a2c35aa29eec0513fa",
+    "after": "ae628c5e588bc9f0e3d4a6e8ce5b292803c510dedd9b49b5f3cfe5195f63a083"
+  },
+  "core/kyty/graphics/host_gpu/renderer/pipeline/pipelineSerialization.cpp": {
+    "before": "858a04009bcbed17005d5465a1b2873ccb7846dccbef6892ca6109c7176e928b",
+    "after": "4d7538c39afb1852b87837409b4c54de7dbd4a79e43cacb7e32d30c82e0e10b7"
+  },
+  "core/kyty/graphics/host_gpu/renderer/protectionLane.h": {
+    "before": null,
+    "after": "79c73f8386814e6ce3b9f98e6acbec2eb1ba5b3b0ed8f8677d5550204e1d15bd"
+  },
+  "core/kyty/graphics/host_gpu/renderer/renderContext.cpp": {
+    "before": "24060a78e655e51357f355b08840d995c798d614e75a6fe43aea04be434b194d",
+    "after": "99dfe643fec0d7623d14f99789df773e8cb4fc9683436484058ea5d8a3fe3987"
+  },
+  "core/kyty/graphics/shader/SpirvLoopFuel.h": {
+    "before": null,
+    "after": "2b05071b19f192f8167479f1520f5a29532dd1d88343cfdff758330182c8741e"
+  },
+  "core/kyty/graphics/shader/recompiler/backend/spirv/spirvEmitterImage.cpp": {
+    "before": "1d92850d3d6f7123fddda2d194344ea581204c6d5ec21ce714cc10f67ac63832",
+    "after": "51e6c4a09fe54981ef0509fa71dfce42236ac14c4207ebd1b492557560a460b0"
+  },
+  "core/kyty/graphics/shader/recompiler/ir/passes/ResourceMaterialization.cpp": {
+    "before": "cb8feefe0597fc5dab4efa68a28d6819c5fc2afeacc1bfc1aec4383c7c812da1",
+    "after": "18d083ac80df8b9b8563f99d7d676a74244fd4648d59ef7b3b4913c371b4be7f"
+  },
+  "core/kyty/graphics/shader/recompiler/ir/rgbaSignedStorage.h": {
+    "before": null,
+    "after": "a9bfc51fa7cad76f073e09ae1974032eaebc4ee5324b21adc7402369fd6c88ba"
+  },
+  "core/libs/prx/libSceAgcDriver/KytyShim/src/MemoryGpu.cpp": {
+    "before": "0beaf50838853c22fb80ebbcc18177242f2ca3be62a56639b9106f0437ac7a3b",
+    "after": "e6843034025bac54f087c6a68b37a2c2c989275f385c7d567a674a4073356777"
+  }
+}
