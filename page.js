@@ -20,7 +20,10 @@ async function showBenchmark() {
   }
   document.querySelector("#display").textContent = latest.display_note;
   document.querySelector("#comparison").textContent = latest.comparison_note || "";
-  document.querySelector("#milestone").textContent = "Next movement milestone: " + (latest.average_fps + 10).toFixed(1) + " FPS.";
+  const target = Math.min(120, latest.average_fps + 10);
+  document.querySelector("#milestone").textContent = latest.average_fps >= 120
+    ? "The 120 FPS movement target has been reached."
+    : "The next movement milestone is " + target.toFixed(2) + " FPS.";
 }
 showBenchmark().catch(() => {
   document.querySelector("#fps").textContent = "—";

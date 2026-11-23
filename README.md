@@ -6,6 +6,8 @@
 
 This project tracks a Windows recompile using [AnyPS5](https://github.com/boykopovar/AnyPS5). The target is 120 FPS at a native render resolution of 2560 × 1440. Terra measures two 30-second prologue routes with simultaneous character movement and camera rotation. Each 10 FPS gain in their combined average gets a new recording and benchmark entry.
 
+The benchmark runner reads the last published average from GitHub and checks the next 10 FPS gain or the final 120 FPS target. It counts completed game frames over the total time for both routes and checks the engine frame rate, internal render scale and clean exit. When a run qualifies, Terra reviews images from both routes and the new gameplay recording for visible movement and complete scenery. An accepted run publishes the recording and benchmark entry together.
+
 ## Play on Windows
 
 **[Download Saros for Windows (74 MB)](https://github.com/portingpete/Saros-Recomp/releases/download/v0.2.0-windows-drop-in/Saros-Windows-Drop-In.zip)**
