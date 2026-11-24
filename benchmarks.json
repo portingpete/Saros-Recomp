@@ -189,6 +189,47 @@
         "scope": "Separate moving pass after the two routes on the independently rebuilt renderer."
       },
       "recording_sha256": "7bd761915beffe2b07b4ef402b68669481f5456385f8d95addbe63c88253f172"
+    },
+    {
+      "date": "2026-11-23",
+      "average_fps": 51.819480258944104,
+      "routes": [
+        {
+          "name": "Open-floor circle",
+          "frames": 1717,
+          "seconds": 30.003659,
+          "fps": 57.2264,
+          "p95_ms": 24.385,
+          "minimum_travel_units": 1862.203
+        },
+        {
+          "name": "Wide turn after forward run",
+          "frames": 1393,
+          "seconds": 30.012381,
+          "fps": 46.4142,
+          "p95_ms": 32.737,
+          "minimum_travel_units": 3189.949
+        }
+      ],
+      "render_size": [
+        2560,
+        1440
+      ],
+      "render_scale_percent": 100,
+      "device": "NVIDIA GeForce RTX 5080",
+      "cpu": "Intel Core i9-14900K",
+      "game_sha256": "6bd1ce70dea706e606aa49133166cd523e6317d559e71dbfa3d9e0117303f0b4",
+      "driver_sha256": "5ee6cbd71aa9318316ec7a689eae4119f83a995a5e5686eef266801eaf24f20c",
+      "display_note": "Run opt120-v20-pgo-stock-full. Both 30-second moving routes rendered at 2560 \u00d7 1440 and 100% internal scale. The recording shows a separate movement pass on the same renderer.",
+      "capture": {
+        "width": 1280,
+        "height": 720,
+        "r_frame_rate": "37/6",
+        "duration": "7.848000"
+      },
+      "runtime_exit": "0x00000000",
+      "renderer_options": {},
+      "recording_sha256": "6665d9c93ad09c2443b7f4ae15fe4a28e53df4d23d160bd218110d44880a7d2d"
     }
   ]
 }
