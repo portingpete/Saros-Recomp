@@ -25,7 +25,21 @@
     <p>The benchmark measures two 30-second prologue routes with simultaneous sprinting, steering and camera rotation. The average divides completed game frames by total elapsed time, including stalls. The video shows a separate movement pass. <a href="windows/drop_in/release-benchmark.json">The downloadable Windows release averaged 33.57 FPS across its two warm routes.</a></p>
     <div class="table-wrap"><table><thead><tr><th>Movement route</th><th>Frames</th><th>Average FPS</th><th>95th percentile frame time</th></tr></thead><tbody id="routes"></tbody></table></div>
     <p id="comparison" class="note"></p><p id="display" class="note"></p><p id="milestone" class="note"></p>
+    <p class="note"><a href="#renderer-experiment">See the November 27 renderer experiment ↓</a></p>
     <noscript><p>Read the frame counts, elapsed times and resolution in the benchmark data below.</p></noscript></section>
+    <section id="renderer-experiment" aria-labelledby="renderer-title">
+      <div class="section-title"><h2 id="renderer-title">Experimental renderer</h2><time datetime="2026-11-27">November 27, 2026</time></div>
+      <p>The x28 build averaged <strong>63.21 completed flips per second</strong> at native 1440p across three runs of both prologue routes. The control averaged 53.54. All nine runs skipped some compute dispatches, so image equivalence across both routes remains unverified.</p>
+      <div class="table-wrap"><table>
+        <thead><tr><th scope="col">Build</th><th scope="col">Tight route</th><th scope="col">Wide route</th><th scope="col">Both routes</th></tr></thead>
+        <tbody>
+          <tr><th scope="row">Control</th><td>57.51 FPS</td><td>49.58 FPS</td><td>53.54 FPS</td></tr>
+          <tr><th scope="row">x14</th><td>67.71 FPS</td><td>57.59 FPS</td><td>62.65 FPS</td></tr>
+          <tr><th scope="row">x28</th><td>69.15 FPS</td><td>57.27 FPS</td><td>63.21 FPS</td></tr>
+        </tbody>
+      </table></div>
+      <p class="note"><a href="https://github.com/portingpete/Saros-Recomp/blob/main/windows/experiments/renderer-nov27/README.md">Source patch, build instructions and captures ↗</a> · <a href="windows/experiments/renderer-nov27/measurements.json">Per-run measurements</a></p>
+    </section>
   </main>
   <footer><div class="wrap bottom"><span>Saros on Windows</span><div><a href="benchmarks.json">Benchmark data</a><a href="https://github.com/boykopovar/AnyPS5">AnyPS5 ↗</a></div></div></footer>
   <script src="page.js" defer></script>
