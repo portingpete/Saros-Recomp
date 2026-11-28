@@ -1,0 +1,688 @@
+{
+  "date": "2026-11-27",
+  "profile": "SarosNativeFXAA",
+  "unit": "VideoOut completed flip intervals per second",
+  "builds": {
+    "g100w": {
+      "renderer_sha256": "2a1807541250884d7a8b5279d2debbf200cedbd9ce1a5927245dd69967204569",
+      "game_sha256": "6a87f5e2031b16683217cf7eb8d1fc3a659385f884de096373f29b02a393cffa",
+      "profile_overlay_sha256": "5141087984b7a92f25d6aba39e25b3a61c539dffd9fa10ad33a0cfe619cb03dd",
+      "cache_seed": "lean1",
+      "guest_cvars": {
+        "r.DynamicRes.OperationMode": [
+          2,
+          2
+        ],
+        "r.DynamicRes.MinScreenPercentage": [
+          100.0,
+          100.0
+        ],
+        "r.DynamicRes.MaxScreenPercentage": [
+          100.0,
+          100.0
+        ],
+        "t.MaxFPS": [
+          120.0,
+          120.0
+        ],
+        "sg.ShadowQuality": [
+          0,
+          0
+        ],
+        "sg.GlobalIlluminationQuality": [
+          0,
+          0
+        ],
+        "sg.ReflectionQuality": [
+          0,
+          0
+        ],
+        "sg.EffectsQuality": [
+          0,
+          0
+        ]
+      },
+      "settings": {
+        "ANYPS5_FULLSCREEN": "borderless",
+        "ANYPS5_VBLANK_HZ": "120",
+        "APS5_ATOMIC_STAGE_MAX_KIB": "32768",
+        "APS5_AUDIO_PROPAGATION_DRY": "1",
+        "APS5_AVPLAYER_EOS_REWIND": "1",
+        "APS5_BINDLESS_IMAGES": "1",
+        "APS5_BINDLESS_LAZY": "1",
+        "APS5_BINDLESS_STATS": "1",
+        "APS5_FORCE_SDR": "1",
+        "APS5_IMAGE_TABLE_KEY_SCAN": "512",
+        "APS5_MATERIAL_COMMAND_TAIL": "1",
+        "APS5_NO_MIRROR_PUBLISH": "1",
+        "APS5_NO_RESIDENT_RANGES": "1",
+        "APS5_OUTPUT_RESOLUTION": "2560x1440",
+        "APS5_PREBUILD_THREADS": "2",
+        "APS5_SAROS_BALLOT_REUSE": "1",
+        "APS5_SAROS_JOIN_72_MIB": "1",
+        "APS5_SAROS_LIGHT_CONSUMER_TABLE": "1",
+        "APS5_SAROS_LIGHT_VOLUME_TABLES": "1",
+        "APS5_SAROS_NATIVE_1440P": "1",
+        "APS5_SAROS_SEEK_INTROS": "1",
+        "APS5_TITLE_EVERY_FRAME": "1",
+        "APS5_TRACE_MATERIAL_IB": "1",
+        "APS5_VIDEOOUT_FLIP_TIMING": "1:100000",
+        "APS5_WRITTEN_SHADOW_EXTRA_KIB": "57600",
+        "KYTY_ALIAS_BUFFERS": "1",
+        "KYTY_ALIAS_MAX_KIB": "4096",
+        "KYTY_ALIAS_PAST_GPU": "2",
+        "KYTY_ALIAS_SMALL_WRITES": "16",
+        "KYTY_ASSUME_STABLE_GPU_BYTES": "1",
+        "KYTY_ASYNC_PIPELINES": "0",
+        "KYTY_BATCH_SUBMITS": "8",
+        "KYTY_BATCH_WINDOWS_PROTECT": "1",
+        "KYTY_BDA_REGIONS": "0",
+        "KYTY_FAST_TLS": "0",
+        "KYTY_GPU_PEEK_ORDERED": "2",
+        "KYTY_GPU_SPIN_US": "200",
+        "KYTY_GPU_THREAD_CPUS": "off",
+        "KYTY_GUARD_PREDICTIONS": "1",
+        "KYTY_GUEST_READBACK_SUBMIT": "1",
+        "KYTY_IDLE_SUBMIT": "1",
+        "KYTY_LEAN_ATOMIC_FENCES": "1",
+        "KYTY_PAGE_GROUP_LOOKUP": "1",
+        "KYTY_PIPELINE_CHAIN": "0",
+        "KYTY_PIPELINE_MANIFEST": "0",
+        "KYTY_PRESENT_MODE": "immediate",
+        "KYTY_RECORD_PIPELINE_MANIFEST": "0",
+        "KYTY_SAROS_LDS_PRIVATE": "1",
+        "KYTY_SAROS_REGION_BUFFER_INDEX": "1",
+        "KYTY_SHADER_CACHE_SHARED": "1",
+        "KYTY_SHADER_CACHE_THREADS": "1",
+        "KYTY_WINDOWS_REGION_PREFIX": "1",
+        "KYTY_WRITE_FAULT_BLOCKS": "1",
+        "SAROS_EXCLUSIVE_1440P120": "0",
+        "SAROS_MENU_CURSOR": "1",
+        "SAROS_PARALLEL_PROTECTION": "1",
+        "SAROS_TRANSFER_BATCHES": "0"
+      }
+    },
+    "g100x14": {
+      "renderer_sha256": "3807f5465415a329f08a3979d36ca1cceb70b17acbdb6f4b796a6aa941955646",
+      "game_sha256": "6a87f5e2031b16683217cf7eb8d1fc3a659385f884de096373f29b02a393cffa",
+      "profile_overlay_sha256": "5141087984b7a92f25d6aba39e25b3a61c539dffd9fa10ad33a0cfe619cb03dd",
+      "cache_seed": "break12opt",
+      "guest_cvars": {
+        "r.DynamicRes.OperationMode": [
+          2,
+          2
+        ],
+        "r.DynamicRes.MinScreenPercentage": [
+          100.0,
+          100.0
+        ],
+        "r.DynamicRes.MaxScreenPercentage": [
+          100.0,
+          100.0
+        ],
+        "t.MaxFPS": [
+          120.0,
+          120.0
+        ],
+        "sg.ShadowQuality": [
+          0,
+          0
+        ],
+        "sg.GlobalIlluminationQuality": [
+          0,
+          0
+        ],
+        "sg.ReflectionQuality": [
+          0,
+          0
+        ],
+        "sg.EffectsQuality": [
+          0,
+          0
+        ]
+      },
+      "settings": {
+        "ANYPS5_FULLSCREEN": "borderless",
+        "ANYPS5_VBLANK_HZ": "120",
+        "APS5_ATOMIC_STAGE_MAX_KIB": "32768",
+        "APS5_AUDIO_PROPAGATION_DRY": "1",
+        "APS5_AVPLAYER_EOS_REWIND": "1",
+        "APS5_BINDLESS_IMAGES": "1",
+        "APS5_BINDLESS_LAZY": "1",
+        "APS5_BINDLESS_STATS": "1",
+        "APS5_FORCE_SDR": "1",
+        "APS5_IMAGE_TABLE_KEY_SCAN": "512",
+        "APS5_MATERIAL_COMMAND_TAIL": "1",
+        "APS5_NO_MIRROR_PUBLISH": "1",
+        "APS5_NO_RESIDENT_RANGES": "1",
+        "APS5_OUTPUT_RESOLUTION": "2560x1440",
+        "APS5_PREBUILD_THREADS": "2",
+        "APS5_SAROS_BALLOT_REUSE": "1",
+        "APS5_SAROS_JOIN_72_MIB": "1",
+        "APS5_SAROS_LIGHT_CONSUMER_TABLE": "1",
+        "APS5_SAROS_LIGHT_VOLUME_TABLES": "1",
+        "APS5_SAROS_NATIVE_1440P": "1",
+        "APS5_SAROS_SEEK_INTROS": "1",
+        "APS5_TITLE_EVERY_FRAME": "1",
+        "APS5_TRACE_MATERIAL_IB": "1",
+        "APS5_VIDEOOUT_FLIP_TIMING": "1:100000",
+        "APS5_WRITTEN_SHADOW_EXTRA_KIB": "57600",
+        "KYTY_ALIAS_BUFFERS": "1",
+        "KYTY_ALIAS_DMA_COPY_MAX_KIB": "512",
+        "KYTY_ALIAS_GPU_WRITES": "1",
+        "KYTY_ALIAS_GPU_WRITE_MAX_KIB": "16",
+        "KYTY_ALIAS_MAX_KIB": "4096",
+        "KYTY_ALIAS_PAST_GPU": "2",
+        "KYTY_ALIAS_READBACK_BUFFERS": "1",
+        "KYTY_ALIAS_SMALL_WRITES": "16",
+        "KYTY_ASSUME_STABLE_GPU_BYTES": "1",
+        "KYTY_ASYNC_PIPELINES": "0",
+        "KYTY_ASYNC_RELEASE_MEM": "1",
+        "KYTY_BATCH_SUBMITS": "8",
+        "KYTY_BATCH_WINDOWS_PROTECT": "1",
+        "KYTY_BDA_REGIONS": "0",
+        "KYTY_CLAMP_NOATT_AREA": "1",
+        "KYTY_DEFER_RECORD_COPY_WAIT": "1",
+        "KYTY_FAST_FLOAT": "3",
+        "KYTY_FAST_HOST_READBACK": "1",
+        "KYTY_FAST_IMAGE_CLEAR": "1",
+        "KYTY_FAST_TLS": "0",
+        "KYTY_GPU_PEEK_ORDERED": "2",
+        "KYTY_GPU_SPIN_US": "200",
+        "KYTY_GPU_THREAD_CPUS": "off",
+        "KYTY_GUARD_PREDICTIONS": "1",
+        "KYTY_GUEST_READBACK_SUBMIT": "1",
+        "KYTY_IDLE_SUBMIT": "1",
+        "KYTY_LEAN_ATOMIC_FENCES": "2",
+        "KYTY_LEAN_COMPUTE_BARRIERS": "2",
+        "KYTY_LEAN_LDS_SYNC": "1",
+        "KYTY_LOOP_FUEL_MIN": "200",
+        "KYTY_NATIVE_LDS_SUBWORD": "1",
+        "KYTY_PAGE_GROUP_LOOKUP": "1",
+        "KYTY_PARALLEL_BDA_SYNC": "1",
+        "KYTY_PIPELINE_CHAIN": "0",
+        "KYTY_PIPELINE_MANIFEST": "0",
+        "KYTY_PRESENT_MODE": "immediate",
+        "KYTY_PROTECT_WORKERS": "2",
+        "KYTY_QUEUE_BACKED_UPLOAD_PIECES": "1",
+        "KYTY_READBACK_BATCH_ALL": "1",
+        "KYTY_READBACK_SKIP_DONE_WAIT": "1",
+        "KYTY_READBACK_SPIN_US": "150",
+        "KYTY_RECORD_PIPELINE_MANIFEST": "0",
+        "KYTY_RT_VERIFY_PERIOD": "8",
+        "KYTY_SAROS_LDS_PRIVATE": "1",
+        "KYTY_SAROS_REGION_BUFFER_INDEX": "1",
+        "KYTY_SHADER_CACHE_SHARED": "1",
+        "KYTY_SHADER_CACHE_STAMP": "0x5fc781985130459f",
+        "KYTY_SHADER_CACHE_THREADS": "1",
+        "KYTY_SMART_COPY_DRAIN": "1",
+        "KYTY_SMART_TARGET_REFRESH": "2",
+        "KYTY_WINDOWS_REGION_PREFIX": "1",
+        "KYTY_WRITE_DRAIN_SKIP": "1",
+        "KYTY_WRITE_FAULT_BLOCKS": "1",
+        "SAROS_EXCLUSIVE_1440P120": "0",
+        "SAROS_MENU_CURSOR": "1",
+        "SAROS_PARALLEL_PROTECTION": "1",
+        "SAROS_TRANSFER_BATCHES": "0"
+      }
+    },
+    "g100x28": {
+      "renderer_sha256": "6d64c8463abbae12d7407cba25b976f8ab4efcc8e5c44f1a954d816cf1eb2013",
+      "game_sha256": "6a87f5e2031b16683217cf7eb8d1fc3a659385f884de096373f29b02a393cffa",
+      "profile_overlay_sha256": "5141087984b7a92f25d6aba39e25b3a61c539dffd9fa10ad33a0cfe619cb03dd",
+      "cache_seed": "break21opt",
+      "guest_cvars": {
+        "r.DynamicRes.OperationMode": [
+          2,
+          2
+        ],
+        "r.DynamicRes.MinScreenPercentage": [
+          100.0,
+          100.0
+        ],
+        "r.DynamicRes.MaxScreenPercentage": [
+          100.0,
+          100.0
+        ],
+        "t.MaxFPS": [
+          120.0,
+          120.0
+        ],
+        "sg.ShadowQuality": [
+          0,
+          0
+        ],
+        "sg.GlobalIlluminationQuality": [
+          0,
+          0
+        ],
+        "sg.ReflectionQuality": [
+          0,
+          0
+        ],
+        "sg.EffectsQuality": [
+          0,
+          0
+        ]
+      },
+      "settings": {
+        "ANYPS5_FULLSCREEN": "borderless",
+        "ANYPS5_VBLANK_HZ": "120",
+        "APS5_ATOMIC_STAGE_MAX_KIB": "32768",
+        "APS5_AUDIO_PROPAGATION_DRY": "1",
+        "APS5_AVPLAYER_EOS_REWIND": "1",
+        "APS5_BINDLESS_IMAGES": "1",
+        "APS5_BINDLESS_LAZY": "1",
+        "APS5_BINDLESS_STATS": "1",
+        "APS5_FORCE_SDR": "1",
+        "APS5_IMAGE_TABLE_KEY_SCAN": "512",
+        "APS5_MATERIAL_COMMAND_TAIL": "1",
+        "APS5_NO_MIRROR_PUBLISH": "1",
+        "APS5_NO_RESIDENT_RANGES": "1",
+        "APS5_OUTPUT_RESOLUTION": "2560x1440",
+        "APS5_PREBUILD_THREADS": "2",
+        "APS5_SAROS_BALLOT_REUSE": "1",
+        "APS5_SAROS_JOIN_72_MIB": "1",
+        "APS5_SAROS_LIGHT_CONSUMER_TABLE": "1",
+        "APS5_SAROS_LIGHT_VOLUME_TABLES": "1",
+        "APS5_SAROS_NATIVE_1440P": "1",
+        "APS5_SAROS_SEEK_INTROS": "1",
+        "APS5_TITLE_EVERY_FRAME": "1",
+        "APS5_TRACE_MATERIAL_IB": "1",
+        "APS5_VIDEOOUT_FLIP_TIMING": "1:100000",
+        "APS5_WRITTEN_SHADOW_EXTRA_KIB": "57600",
+        "KYTY_ALIAS_BUFFERS": "1",
+        "KYTY_ALIAS_DMA_COPY_MAX_KIB": "512",
+        "KYTY_ALIAS_GPU_WRITES": "1",
+        "KYTY_ALIAS_GPU_WRITE_MAX_KIB": "16",
+        "KYTY_ALIAS_MAX_KIB": "4096",
+        "KYTY_ALIAS_PAST_GPU": "2",
+        "KYTY_ALIAS_READBACK_BUFFERS": "2",
+        "KYTY_ALIAS_SMALL_WRITES": "16",
+        "KYTY_ASSUME_STABLE_GPU_BYTES": "1",
+        "KYTY_ASYNC_PIPELINES": "0",
+        "KYTY_ASYNC_RELEASE_MEM": "1",
+        "KYTY_BATCH_SUBMITS": "8",
+        "KYTY_BATCH_WINDOWS_PROTECT": "1",
+        "KYTY_BDA_REGIONS": "0",
+        "KYTY_BDA_USE_BITS": "0",
+        "KYTY_CLAMP_NOATT_AREA": "1",
+        "KYTY_DEFER_RECORD_COPY_WAIT": "1",
+        "KYTY_FAST_BDA_LOAD": "1",
+        "KYTY_FAST_FLOAT": "3",
+        "KYTY_FAST_HOST_READBACK": "1",
+        "KYTY_FAST_IMAGE_CLEAR": "1",
+        "KYTY_FAST_TABLE_MEM": "1",
+        "KYTY_FAST_TLS": "0",
+        "KYTY_GPU_PEEK_ORDERED": "2",
+        "KYTY_GPU_SPIN_US": "200",
+        "KYTY_GPU_THREAD_CPUS": "off",
+        "KYTY_GUARD_PREDICTIONS": "1",
+        "KYTY_GUEST_READBACK_SUBMIT": "1",
+        "KYTY_IDLE_SUBMIT": "1",
+        "KYTY_LEAN_ATOMIC_FENCES": "2",
+        "KYTY_LEAN_COMPUTE_BARRIERS": "2",
+        "KYTY_LEAN_LDS_SYNC": "1",
+        "KYTY_LOOP_FUEL_MIN": "200",
+        "KYTY_NATIVE_LDS_SUBWORD": "1",
+        "KYTY_PAGE_GROUP_LOOKUP": "1",
+        "KYTY_PARALLEL_BDA_SYNC": "1",
+        "KYTY_PIPELINE_CHAIN": "0",
+        "KYTY_PIPELINE_MANIFEST": "0",
+        "KYTY_PRESENT_MODE": "immediate",
+        "KYTY_PROTECT_WORKERS": "2",
+        "KYTY_QUEUE_BACKED_UPLOAD_PIECES": "1",
+        "KYTY_READBACK_BATCH_ALL": "1",
+        "KYTY_READBACK_SKIP_DONE_WAIT": "1",
+        "KYTY_READBACK_SPIN_US": "150",
+        "KYTY_RECORD_PIPELINE_MANIFEST": "0",
+        "KYTY_RT_VERIFY_PERIOD": "8",
+        "KYTY_SAROS_LDS_PRIVATE": "1",
+        "KYTY_SAROS_REGION_BUFFER_INDEX": "1",
+        "KYTY_SHADER_CACHE_SHARED": "1",
+        "KYTY_SHADER_CACHE_STAMP": "0x5fb2f2fd255f3cec",
+        "KYTY_SHADER_CACHE_THREADS": "1",
+        "KYTY_SMART_COPY_DRAIN": "1",
+        "KYTY_SMART_TARGET_REFRESH": "4",
+        "KYTY_TABLE_DISPATCH": "1",
+        "KYTY_TABLE_TARGET_READ": "1",
+        "KYTY_WINDOWS_REGION_PREFIX": "1",
+        "KYTY_WRITE_DRAIN_SKIP": "1",
+        "KYTY_WRITE_FAULT_BLOCKS": "1",
+        "SAROS_EXCLUSIVE_1440P120": "0",
+        "SAROS_MENU_CURSOR": "1",
+        "SAROS_PARALLEL_PROTECTION": "1",
+        "SAROS_TRANSFER_BATCHES": "0"
+      }
+    }
+  },
+  "runs": [
+    {
+      "id": "finalab-base-4",
+      "build": "g100w",
+      "report_sha256": "1474ef8158af9db13ab81199263cea2a396ed0c9668fecd43bc804c171887820",
+      "launch_sha256": "ebf0f2202e62fab873f26b08cfc3404f386762c6e9a0c03b410e92266a1698a9",
+      "exit_code": 0,
+      "telemetry_drops": 0,
+      "combined_fps": 53.8225,
+      "routes": {
+        "seed_circle": {
+          "observed_completions": 1718,
+          "seconds": 30.00847,
+          "p95_ms": 22.218,
+          "minimum_travel_world_units": 1906.168,
+          "bracketed_consecutive_sequence": true
+        },
+        "circle_camera": {
+          "observed_completions": 1512,
+          "seconds": 30.003559,
+          "p95_ms": 26.797,
+          "minimum_travel_world_units": 3533.976,
+          "bracketed_consecutive_sequence": true
+        }
+      },
+      "stderr_sha256": "32a5c095e0ab2ca9cd15530d7027239f4190227cb48492768845cb6e17b1406f",
+      "last_prediction_guard_sample": {
+        "dispatches_checked": 39680,
+        "uncheckable": 0,
+        "skipped": 6
+      }
+    },
+    {
+      "id": "finalab-base-5",
+      "build": "g100w",
+      "report_sha256": "6b359f713bb6f86f37a0437f261e63478fd92918fffc1c5bdda0550cd2cd6b29",
+      "launch_sha256": "4f5ea8685ccfca544a8370aef2c8bd81fd98a62477539c2569a2bf3d5e42016a",
+      "exit_code": 0,
+      "telemetry_drops": 0,
+      "combined_fps": 53.9136,
+      "routes": {
+        "seed_circle": {
+          "observed_completions": 1754,
+          "seconds": 30.011762,
+          "p95_ms": 21.838,
+          "minimum_travel_world_units": 1715.732,
+          "bracketed_consecutive_sequence": true
+        },
+        "circle_camera": {
+          "observed_completions": 1482,
+          "seconds": 30.010189,
+          "p95_ms": 27.944,
+          "minimum_travel_world_units": 4241.625,
+          "bracketed_consecutive_sequence": true
+        }
+      },
+      "stderr_sha256": "3a03220e7859ea62dacbaf07097d4d281548fd7986b7266e75f36fa5c46d004e",
+      "last_prediction_guard_sample": {
+        "dispatches_checked": 34304,
+        "uncheckable": 0,
+        "skipped": 5
+      }
+    },
+    {
+      "id": "finalab-base-6",
+      "build": "g100w",
+      "report_sha256": "fde104d4453e158321d709f64d705a1542e938cdeebcc2de12fca23efb21b951",
+      "launch_sha256": "ed8dfbc08f46c9f295ca9de9200d291429867cab727ab7c421bdc75c02c7efd7",
+      "exit_code": 0,
+      "telemetry_drops": 0,
+      "combined_fps": 52.8986,
+      "routes": {
+        "seed_circle": {
+          "observed_completions": 1705,
+          "seconds": 30.001185,
+          "p95_ms": 22.56,
+          "minimum_travel_world_units": 1869.617,
+          "bracketed_consecutive_sequence": true
+        },
+        "circle_camera": {
+          "observed_completions": 1469,
+          "seconds": 30.000395,
+          "p95_ms": 28.683,
+          "minimum_travel_world_units": 3497.373,
+          "bracketed_consecutive_sequence": true
+        }
+      },
+      "stderr_sha256": "10b301725036622cfb0051995ed44d68d6489e7b03b5cb354c727a7c2db11418",
+      "last_prediction_guard_sample": {
+        "dispatches_checked": 33792,
+        "uncheckable": 0,
+        "skipped": 3
+      }
+    },
+    {
+      "id": "finalab-x14full-1",
+      "build": "g100x14",
+      "report_sha256": "b6ce3c76e7cd9a65a347ebe05589022fa332f311f5c71e0d923fa1446b7bc646",
+      "launch_sha256": "1c12133228d18b1f5aa1f0828680bb8ad5013d2eab189da60b9fba65c20d1808",
+      "exit_code": 0,
+      "telemetry_drops": 0,
+      "combined_fps": 61.3181,
+      "routes": {
+        "seed_circle": {
+          "observed_completions": 2002,
+          "seconds": 30.009618,
+          "p95_ms": 19.604,
+          "minimum_travel_world_units": 2056.251,
+          "bracketed_consecutive_sequence": true
+        },
+        "circle_camera": {
+          "observed_completions": 1679,
+          "seconds": 30.021619,
+          "p95_ms": 24.792,
+          "minimum_travel_world_units": 3754.014,
+          "bracketed_consecutive_sequence": true
+        }
+      },
+      "stderr_sha256": "6411b6d410af49c4d4bf826ef3379fc156207a1e63f5e0fd2a4a39d49bd871cf",
+      "last_prediction_guard_sample": {
+        "dispatches_checked": 40448,
+        "uncheckable": 0,
+        "skipped": 5
+      }
+    },
+    {
+      "id": "finalab-x14full-2",
+      "build": "g100x14",
+      "report_sha256": "ded833a4bbeb12911218adc73d24cfa49d641e796e4aefc917c79953cf37a476",
+      "launch_sha256": "23471a13381a5115993643947c91aeb5ed5995249686c013858fa56ed7b5434c",
+      "exit_code": 0,
+      "telemetry_drops": 0,
+      "combined_fps": 61.057,
+      "routes": {
+        "seed_circle": {
+          "observed_completions": 1991,
+          "seconds": 30.009646,
+          "p95_ms": 19.319,
+          "minimum_travel_world_units": 1916.113,
+          "bracketed_consecutive_sequence": true
+        },
+        "circle_camera": {
+          "observed_completions": 1674,
+          "seconds": 30.01622,
+          "p95_ms": 24.615,
+          "minimum_travel_world_units": 3650.8,
+          "bracketed_consecutive_sequence": true
+        }
+      },
+      "stderr_sha256": "f0639b9168ba562ac50631affd63cd648a8df2d42c8826e43877522785ba658e",
+      "last_prediction_guard_sample": {
+        "dispatches_checked": 40192,
+        "uncheckable": 0,
+        "skipped": 4
+      }
+    },
+    {
+      "id": "finalab-x14full-3",
+      "build": "g100x14",
+      "report_sha256": "63d1de15cb4e82e192b06b0efceb211de259b2900b45ba819abb21caa166be8e",
+      "launch_sha256": "2506ef6d2bf1fe71562e9973dc60af741b028c7d358af31a8f6296c9845b00e4",
+      "exit_code": 0,
+      "telemetry_drops": 0,
+      "combined_fps": 65.5867,
+      "routes": {
+        "seed_circle": {
+          "observed_completions": 2103,
+          "seconds": 30.006618,
+          "p95_ms": 18.017,
+          "minimum_travel_world_units": 1607.509,
+          "bracketed_consecutive_sequence": true
+        },
+        "circle_camera": {
+          "observed_completions": 1833,
+          "seconds": 30.005546,
+          "p95_ms": 22.302,
+          "minimum_travel_world_units": 4099.888,
+          "bracketed_consecutive_sequence": true
+        }
+      },
+      "stderr_sha256": "76adba932a25ed22bcc8d6398fc03255d0a438bac2f409eb9198bc2eb6c3c59a",
+      "last_prediction_guard_sample": {
+        "dispatches_checked": 45312,
+        "uncheckable": 0,
+        "skipped": 5
+      }
+    },
+    {
+      "id": "finalab-x28ttr-1",
+      "build": "g100x28",
+      "report_sha256": "f69b0d41609f270fc399d70085733b734e62941af7acfbe86968266d71e8fb64",
+      "launch_sha256": "34989f9e975cc4147dbf2e98e439f6fe043f572e2d82a998044b8c4c8b60da43",
+      "exit_code": 0,
+      "telemetry_drops": 0,
+      "combined_fps": 61.6129,
+      "routes": {
+        "seed_circle": {
+          "observed_completions": 2041,
+          "seconds": 30.004476,
+          "p95_ms": 19.581,
+          "minimum_travel_world_units": 1361.595,
+          "bracketed_consecutive_sequence": true
+        },
+        "circle_camera": {
+          "observed_completions": 1657,
+          "seconds": 30.015427,
+          "p95_ms": 24.478,
+          "minimum_travel_world_units": 4937.166,
+          "bracketed_consecutive_sequence": true
+        }
+      },
+      "stderr_sha256": "21b7668b303b4ac1ed4e690ac676b768d2b679a1f6e3f830611d4f7ad08554ba",
+      "last_prediction_guard_sample": {
+        "dispatches_checked": 40960,
+        "uncheckable": 0,
+        "skipped": 1
+      }
+    },
+    {
+      "id": "finalab-x28ttr-2",
+      "build": "g100x28",
+      "report_sha256": "1c1ff41876e5579906cb0844620e5183dd228f533cd3794caf5a5d52b883ee25",
+      "launch_sha256": "d816e3fb2c90e640d3eb69df8770bb6cf98e1f9db19aad86c17f69113ad4a9c9",
+      "exit_code": 0,
+      "telemetry_drops": 0,
+      "combined_fps": 62.8787,
+      "routes": {
+        "seed_circle": {
+          "observed_completions": 2057,
+          "seconds": 30.008588,
+          "p95_ms": 18.723,
+          "minimum_travel_world_units": 1288.164,
+          "bracketed_consecutive_sequence": true
+        },
+        "circle_camera": {
+          "observed_completions": 1717,
+          "seconds": 30.011774,
+          "p95_ms": 24.436,
+          "minimum_travel_world_units": 4360.749,
+          "bracketed_consecutive_sequence": true
+        }
+      },
+      "stderr_sha256": "9a7d9dc9305db23ecec6af86206cb6b3e6d6020d16231f0f450ce66cdd742655",
+      "last_prediction_guard_sample": {
+        "dispatches_checked": 38912,
+        "uncheckable": 0,
+        "skipped": 10
+      }
+    },
+    {
+      "id": "finalab-x28ttr-3",
+      "build": "g100x28",
+      "report_sha256": "f6dacf9a787d337d246b1c12d2b0047604f49dec8ff4392172ad64125195db62",
+      "launch_sha256": "5778bbee486d6ae4f6dab0975b49a6913ad3938e6f75904789ace7c205544681",
+      "exit_code": 0,
+      "telemetry_drops": 0,
+      "combined_fps": 65.1288,
+      "routes": {
+        "seed_circle": {
+          "observed_completions": 2127,
+          "seconds": 30.0127,
+          "p95_ms": 18.179,
+          "minimum_travel_world_units": 1569.671,
+          "bracketed_consecutive_sequence": true
+        },
+        "circle_camera": {
+          "observed_completions": 1782,
+          "seconds": 30.00684,
+          "p95_ms": 23.554,
+          "minimum_travel_world_units": 3583.509,
+          "bracketed_consecutive_sequence": true
+        }
+      },
+      "stderr_sha256": "790f68554d5cf588f3759d4d140cfc0d224dc08315f3def1289d6b01b5b1144f",
+      "last_prediction_guard_sample": {
+        "dispatches_checked": 40960,
+        "uncheckable": 0,
+        "skipped": 7
+      }
+    }
+  ],
+  "rebuild_check": {
+    "patch_sha256": "7be0cebb9e9a4782fc5f527aab498590ba3754dc86d47579a72000e4dedb3f90",
+    "renderer_sha256": "3a8dcee145eb6a7bc296ef71ec843838c5aa25f433673eef0e37bfed19ed1526",
+    "kit_checks": [
+      "ABI and module forwarding",
+      "synthetic shader generation and SPIR-V validation"
+    ],
+    "first_launch": {
+      "initial_cache": "empty",
+      "harness_exit": 1,
+      "last_flip": 850,
+      "route_report": false
+    },
+    "second_launch": {
+      "report_sha256": "634992faf858ce95ea7f406da16064e90552cbb5e635ba1a95e2f21dd2033ef6",
+      "initial_cache": "cache produced by first launch",
+      "settings_note": "x28 settings with the cache stamp override removed and the Vulkan screenshot layer enabled",
+      "exit_code": 0,
+      "telemetry_drops": 0,
+      "flip_at_gameplay_settle": 1659,
+      "combined_fps": 55.4376,
+      "routes": {
+        "seed_circle": {
+          "observed_completions": 1440,
+          "seconds": 30.007227,
+          "p95_ms": 20.941,
+          "minimum_travel_world_units": 2134.117,
+          "first_flip": 1671,
+          "last_flip": 3111,
+          "bracketed_consecutive_sequence": true
+        },
+        "circle_camera": {
+          "observed_completions": 1887,
+          "seconds": 30.006205,
+          "p95_ms": 19.766,
+          "minimum_travel_world_units": 2660.893,
+          "first_flip": 3263,
+          "last_flip": 5150,
+          "bracketed_consecutive_sequence": true
+        }
+      },
+      "captured_swapchain_frames": [
+        1400,
+        2800,
+        3700
+      ]
+    }
+  }
+}

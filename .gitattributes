@@ -3,3 +3,4 @@ windows/renderer/** -text
 windows/experiments/interpolation/*.patch -text -whitespace
 windows/experiments/optical-flow/*.patch -text -whitespace
 windows/experiments/native-uploads/*.patch -text -whitespace
+windows/experiments/renderer-nov27/*.patch -text -whitespace

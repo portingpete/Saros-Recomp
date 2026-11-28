@@ -22,6 +22,8 @@ Terra tested the exact download with an empty save and empty game shader cache o
 
 ## Native 1440p benchmarks
 
+On November 27, the experimental x28 renderer averaged **63.21 completed flips per second** across three pairs of moving prologue routes, compared with **53.54** for the interleaved control. The wide route averaged **57.27 FPS** on x28. Both configurations skipped some compute dispatches, so image equivalence remains unverified. [November 27 results and renderer source](windows/experiments/renderer-nov27/README.md)
+
 The drop-in release averaged **33.57 in-game FPS** on the route-warmed run. The tight route reached **40.98 FPS** and the wide route **26.16 FPS**. The first pass with only the prologue cache averaged **26.23 FPS**. The wide runs followed different paths, and eight compute pipeline stalls of at least 100 ms overlapped 7.43 seconds of the warm wide run. [Release timings](windows/drop_in/release-benchmark.json) · [Six gameplay frames](media/drop-in-routes.jpg)
 
 The earlier benchmark renderer averaged **41.02 FPS**, then **38.51 FPS** on a repeat. Its independently built counterpart averaged **39.76 FPS** with a warm cache. Those results cover two moving prologue routes at 100% internal scale, with FXAA enabled and frame generation disabled. The drop-in release uses a different renderer. [Route timings and renderer hashes](windows/experiments/native-uploads/measurements.json) · [Original v0.1.0 source kit](https://github.com/portingpete/Saros-Recomp/releases/tag/v0.1.0-native-1440p)
