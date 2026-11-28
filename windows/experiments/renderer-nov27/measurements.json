@@ -697,6 +697,69 @@
       "compiler": "Clang 18",
       "translation_units": 8,
       "scope": "Syntax only, with the unsupported TLS code generation flag omitted"
-    }
+    },
+    "cold_smoke_before_linux_trace_guard": {
+      "report_sha256": "30450cabdc282e6a2674adf86754eae1ff0b27e1e774cfb9c4ae31a7b4899798",
+      "renderer_sha256": "44a020f8019d60f60a785fbbf752b1374a8854f07d7fbfc9e99b42d041b1fbc2",
+      "cache_start": "empty",
+      "combined_fps": 25.94,
+      "exit_code": 0,
+      "reported_telemetry_drops": 0,
+      "routes": {
+        "seed_circle": {
+          "observed_completions": 337,
+          "seconds": 30.01119,
+          "completed_flip_fps": 11.2291,
+          "p95_ms": 81.238,
+          "minimum_travel_world_units": 397.854,
+          "bracketed_consecutive_sequence": true,
+          "missing_sequence_numbers": 0
+        },
+        "circle_camera": {
+          "observed_completions": 1220,
+          "seconds": 30.011934,
+          "completed_flip_fps": 40.6505,
+          "p95_ms": 22.4,
+          "minimum_travel_world_units": 3376.694,
+          "bracketed_consecutive_sequence": true,
+          "missing_sequence_numbers": 0
+        }
+      },
+      "cache_summary": [
+        "Shader cache: loaded 0 programs, 0 modules, 0 pipelines in 0 ms"
+      ]
+    },
+    "warm_smoke": {
+      "report_sha256": "212abe47ecb1e5f58a3696d689231c85c84596516cada4c0d589c7cf13b0be41",
+      "renderer_sha256": "17730e23ef5a6eef8b111e3255ef1d5234a41674b6764a300ee7eff4a675a2aa",
+      "cache_start": "warm",
+      "combined_fps": 51.9744,
+      "exit_code": 0,
+      "reported_telemetry_drops": 0,
+      "routes": {
+        "seed_circle": {
+          "observed_completions": 1753,
+          "seconds": 30.00247,
+          "completed_flip_fps": 58.4285,
+          "p95_ms": 22.038,
+          "minimum_travel_world_units": 2183.619,
+          "bracketed_consecutive_sequence": true,
+          "missing_sequence_numbers": 0
+        },
+        "circle_camera": {
+          "observed_completions": 1366,
+          "seconds": 30.007801,
+          "completed_flip_fps": 45.5215,
+          "p95_ms": 27.931,
+          "minimum_travel_world_units": 3296.939,
+          "bracketed_consecutive_sequence": false,
+          "missing_sequence_numbers": 1
+        }
+      },
+      "cache_summary": [
+        "Shader cache: loaded 497 programs, 876 modules, 712 pipelines in 4355 ms"
+      ]
+    },
+    "smoke_settings_note": "x28 launch settings with ordered prediction, prediction guards, stable GPU byte assumptions and cache stamp override disabled. Removed refresh and readback options were omitted."
   }
 }
