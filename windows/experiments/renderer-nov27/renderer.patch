@@ -927,7 +927,7 @@ index 54094445d2dd449cfa49d37213ea169c75f15390..f8ec50b56091496b4dce0f04ae519afd
 +
 +// Saros-Recomp modified this file for the experimental Windows renderer on 2026-11-27.
 diff --git a/core/kyty/graphics/guest_gpu/graphicsRun.cpp b/core/kyty/graphics/guest_gpu/graphicsRun.cpp
-index 0262f6dc0130634a7b2769543b60435536cc4013..bc807a4186bae36af16df35d08cdf40d2f845f12 100644
+index 0262f6dc0130634a7b2769543b60435536cc4013..8d90979b4258785069fe5c1ba3469b251bed8dac 100644
 --- a/core/kyty/graphics/guest_gpu/graphicsRun.cpp
 +++ b/core/kyty/graphics/guest_gpu/graphicsRun.cpp
 @@ -1,3 +1,4 @@
@@ -992,24 +992,6 @@ index 0262f6dc0130634a7b2769543b60435536cc4013..bc807a4186bae36af16df35d08cdf40d
  
 -void GuestGpu::SendCommand(Common::UniqueFunction<void>&& command) {
 +void GuestGpu::SendCommand(Common::UniqueFunction<void>&& command, bool may_write_opaque) {
-+	EXIT_IF(!command);
-+	if (IsGpuThread()) {
-+		command();
-+		return;
-+	}
-+	if (g_cp_thread) {
-+		m_gfx_cp->EmitHostCommand(std::move(command), may_write_opaque);
-+		return;
-+	}
-+	Common::LockGuard lock(m_queue_mutex);
-+	EXIT_IF(!m_accepting);
-+	m_commands.push_back({std::move(command), may_write_opaque, 0, 0});
-+	m_pending_commands.fetch_add(1, std::memory_order_release);
-+	m_work_epoch.fetch_add(1, std::memory_order_release);
-+	m_work_available.Signal();
-+}
-+
-+void GuestGpu::SendRangeCommand(uint64_t address, uint64_t size, Common::UniqueFunction<void>&& command) {
  	EXIT_IF(!command);
  	if (IsGpuThread()) {
  		command();
@@ -1017,16 +999,34 @@ index 0262f6dc0130634a7b2769543b60435536cc4013..bc807a4186bae36af16df35d08cdf40d
  	}
  	if (g_cp_thread) {
 -		m_gfx_cp->EmitHostCommand(std::move(command));
-+		const auto seq = m_gfx_cp->EmitCallback(std::move(command), {}, true, false, false,
-+		                                        size != 0 ? address : 0, size != 0 ? address + size : 0);
-+		if (size != 0) {
-+			NoteGuestWrite(seq, address, size, nullptr);
-+		}
++		m_gfx_cp->EmitHostCommand(std::move(command), may_write_opaque);
  		return;
  	}
  	Common::LockGuard lock(m_queue_mutex);
  	EXIT_IF(!m_accepting);
 -	m_commands.push_back(std::move(command));
++	m_commands.push_back({std::move(command), may_write_opaque, 0, 0});
++	m_pending_commands.fetch_add(1, std::memory_order_release);
++	m_work_epoch.fetch_add(1, std::memory_order_release);
++	m_work_available.Signal();
++}
++
++void GuestGpu::SendRangeCommand(uint64_t address, uint64_t size, Common::UniqueFunction<void>&& command) {
++	EXIT_IF(!command);
++	if (IsGpuThread()) {
++		command();
++		return;
++	}
++	if (g_cp_thread) {
++		const auto seq = m_gfx_cp->EmitCallback(std::move(command), {}, true, false, false,
++		                                        size != 0 ? address : 0, size != 0 ? address + size : 0);
++		if (size != 0) {
++			NoteGuestWrite(seq, address, size, nullptr);
++		}
++		return;
++	}
++	Common::LockGuard lock(m_queue_mutex);
++	EXIT_IF(!m_accepting);
 +	m_commands.push_back({std::move(command), false, address, size});
  	m_pending_commands.fetch_add(1, std::memory_order_release);
  	m_work_epoch.fetch_add(1, std::memory_order_release);
@@ -1156,7 +1156,7 @@ index 0262f6dc0130634a7b2769543b60435536cc4013..bc807a4186bae36af16df35d08cdf40d
  	}
  #endif
  	Enqueue(std::move(submission));
-@@ -452,11 +537,257 @@ void GuestGpu::ReadDecisionMemory(const volatile void* address, void* value, siz
+@@ -452,11 +537,246 @@ void GuestGpu::ReadDecisionMemory(const volatile void* address, void* value, siz
  	CopyFromGuest(value, address, size);
  }
  
@@ -1234,6 +1234,11 @@ index 0262f6dc0130634a7b2769543b60435536cc4013..bc807a4186bae36af16df35d08cdf40d
 +	}
 +	const uint64_t end = address + size;
 +	if (SoundFetchSyncV3()) {
++		// The executor owns the host-copy queue's pending write ranges.
++		if (m_renderer.GetCommandScheduler().HostCopies() != nullptr) {
++			out_reason = 1;
++			return sequence;
++		}
 +		uint64_t max_pending_cb = 0;
 +		ForgetExecutedWrites();
 +		for (size_t i = 0; i < m_pending_count; ++i) {
@@ -1294,8 +1299,6 @@ index 0262f6dc0130634a7b2769543b60435536cc4013..bc807a4186bae36af16df35d08cdf40d
 +		auto&       tex    = m_renderer.GetTextureCache();
 +		auto&       buf    = m_renderer.GetBufferCache();
 +		auto&       sched  = m_renderer.GetCommandScheduler();
-+		auto* const copies = sched.HostCopies();
-+		const bool  has_gw = copies != nullptr && copies->HasPendingGuestWrites();
 +		if (tex.IsRegionGpuModified(address, size)) {
 +			out_reason = 18;
 +			return sequence;
@@ -1303,13 +1306,6 @@ index 0262f6dc0130634a7b2769543b60435536cc4013..bc807a4186bae36af16df35d08cdf40d
 +		if (sched.HasPendingGuestOperations(address, size)) {
 +			out_reason = 1;
 +			return sequence;
-+		}
-+		if (has_gw) {
-+			const void* backing = LibKernel::Memory::FindBackingPointer(address, size);
-+			if (backing == nullptr || copies->MayWriteTo(backing, size)) {
-+				out_reason = 1;
-+				return sequence;
-+			}
 +		}
 +		thread_local std::vector<DeferredReadCheck> checks;
 +		checks.clear();
@@ -1345,13 +1341,6 @@ index 0262f6dc0130634a7b2769543b60435536cc4013..bc807a4186bae36af16df35d08cdf40d
 +			if (sched.HasPendingGuestOperations(dc.address, dc.size)) {
 +				out_reason = 22;
 +				return sequence;
-+			}
-+			if (has_gw) {
-+				const void* backing = LibKernel::Memory::FindBackingPointer(dc.address, dc.size);
-+				if (backing == nullptr || copies->MayWriteTo(backing, dc.size)) {
-+					out_reason = 22;
-+					return sequence;
-+				}
 +			}
 +			if (!LibKernel::Memory::TryReadBacking(dc.address, cur.data(), dc.size) ||
 +			    std::memcmp(cur.data(), dc.bytes.data(), dc.size) != 0) {
@@ -1416,7 +1405,7 @@ index 0262f6dc0130634a7b2769543b60435536cc4013..bc807a4186bae36af16df35d08cdf40d
  void GuestGpu::ExecutionThread() {
  	KYTY_PROFILER_THREAD("Thread_GpuExecute");
  	Config::ConfigureGpuStageThread(Config::GpuStageThread::Execution);
-@@ -471,13 +802,22 @@ void GuestGpu::ExecutionThread() {
+@@ -471,13 +791,22 @@ void GuestGpu::ExecutionThread() {
  	auto&              operations     = m_resolving ? m_resolved : m_operations;
  	for (;;) {
  		if (m_urgent_pending.load(std::memory_order_relaxed) != 0) {
@@ -1439,7 +1428,7 @@ index 0262f6dc0130634a7b2769543b60435536cc4013..bc807a4186bae36af16df35d08cdf40d
  			if (!operation) {
  				if (operations.IsStopped()) {
  					break;
-@@ -489,10 +829,28 @@ void GuestGpu::ExecutionThread() {
+@@ -489,10 +818,28 @@ void GuestGpu::ExecutionThread() {
  			const auto* next = operations.TryPeek();
  			operation->stream_in_place = next != nullptr && !IsDrawOperation(next->kind);
  		}
@@ -1469,7 +1458,7 @@ index 0262f6dc0130634a7b2769543b60435536cc4013..bc807a4186bae36af16df35d08cdf40d
  		if ((sequence & 1023u) == 0) {
  			BufferCache::LogReadbackSummary();
  #if defined(ANYPS5_KYTY)
-@@ -619,14 +977,32 @@ void GuestGpu::ResolveThread() {
+@@ -619,14 +966,32 @@ void GuestGpu::ResolveThread() {
  		helper.emplace(executor);
  	}
  #endif
@@ -1502,7 +1491,7 @@ index 0262f6dc0130634a7b2769543b60435536cc4013..bc807a4186bae36af16df35d08cdf40d
  		if (operation->kind == GpuOperationKind::Callback) {
  			const auto& write = operation->guest_write;
  			if (write.dwords != 0 && write.data != nullptr) {
-@@ -638,6 +1014,7 @@ void GuestGpu::ResolveThread() {
+@@ -638,6 +1003,7 @@ void GuestGpu::ResolveThread() {
  			PipelineCache::RetireAheadGuestWrites(m_executed.Load());
  		}
  		uint32_t table_hint = 0;
@@ -1510,7 +1499,7 @@ index 0262f6dc0130634a7b2769543b60435536cc4013..bc807a4186bae36af16df35d08cdf40d
  		if (operation->kind == GpuOperationKind::DrawIndex || operation->kind == GpuOperationKind::DrawIndirect) {
  			table_hint = executor.TableHint(*operation->state.shaders);
  			if ((table_hint & 1u) != 0 && Scout::Mode() == 3 && Scout::Running()) {
-@@ -663,9 +1040,16 @@ void GuestGpu::ResolveThread() {
+@@ -663,9 +1029,16 @@ void GuestGpu::ResolveThread() {
  				}
  			}
  		}
@@ -1530,7 +1519,7 @@ index 0262f6dc0130634a7b2769543b60435536cc4013..bc807a4186bae36af16df35d08cdf40d
  		} else if (operation->kind == GpuOperationKind::DrawIndex ||
  		           operation->kind == GpuOperationKind::DrawAuto) {
  			if (helper && helper->Takes(*operation->state.shaders)) {
-@@ -702,17 +1086,19 @@ void GuestGpu::ResolveThread() {
+@@ -702,17 +1075,19 @@ void GuestGpu::ResolveThread() {
  			                              Scout::Mode() == 3 && Scout::Running()
  			                          ? executor.TableDispatchHint(cs)
  			                          : 0u;
@@ -1552,7 +1541,7 @@ index 0262f6dc0130634a7b2769543b60435536cc4013..bc807a4186bae36af16df35d08cdf40d
  			} else if (operation->kind == GpuOperationKind::DispatchDirect) {
  				const uint32_t groups[] = {operation->dispatch.thread_group_x,
  				                           operation->dispatch.thread_group_y,
-@@ -727,10 +1113,292 @@ void GuestGpu::ResolveThread() {
+@@ -727,10 +1102,292 @@ void GuestGpu::ResolveThread() {
  				    operation->processor->IsAsyncComputeQueue());
  			}
  		}
@@ -1845,7 +1834,7 @@ index 0262f6dc0130634a7b2769543b60435536cc4013..bc807a4186bae36af16df35d08cdf40d
  		m_resolved.Push(std::move(*operation));
  	}
  	helper.reset();
-@@ -806,14 +1474,22 @@ void CommandProcessor::ApplyContextStateOperation(ContextStateOperation operatio
+@@ -806,14 +1463,22 @@ void CommandProcessor::ApplyContextStateOperation(ContextStateOperation operatio
  	}
  }
  
@@ -1875,7 +1864,7 @@ index 0262f6dc0130634a7b2769543b60435536cc4013..bc807a4186bae36af16df35d08cdf40d
  	operation.clean         = m_draw_observer != nullptr &&
  	                          (kind == GpuOperationKind::DrawIndex || kind == GpuOperationKind::DrawIndirect) &&
  	                          m_draw_observer->LastClean();
-@@ -885,8 +1561,8 @@ void CommandProcessor::NoteGuestWrite(uint64_t sequence, uint64_t address, uint6
+@@ -885,8 +1550,8 @@ void CommandProcessor::NoteGuestWrite(uint64_t sequence, uint64_t address, uint6
  	}
  }
  
@@ -1886,7 +1875,7 @@ index 0262f6dc0130634a7b2769543b60435536cc4013..bc807a4186bae36af16df35d08cdf40d
  }
  
  void CommandProcessor::ReadDecisionMemory(const volatile void* address, void* value,
-@@ -898,10 +1574,19 @@ void CommandProcessor::ReadDecisionMemory(const volatile void* address, void* va
+@@ -898,10 +1563,19 @@ void CommandProcessor::ReadDecisionMemory(const volatile void* address, void* va
  	CopyFromGuest(value, address, size);
  }
  
@@ -1910,7 +1899,7 @@ index 0262f6dc0130634a7b2769543b60435536cc4013..bc807a4186bae36af16df35d08cdf40d
  	return Emit(std::move(operation));
  }
  
-@@ -926,9 +1611,62 @@ static bool IdleSubmitEnabled() {
+@@ -926,9 +1600,62 @@ static bool IdleSubmitEnabled() {
  	return enabled;
  }
  
@@ -1973,7 +1962,7 @@ index 0262f6dc0130634a7b2769543b60435536cc4013..bc807a4186bae36af16df35d08cdf40d
  	if (operation.scout_packet != nullptr && Scout::Running())
  		Scout::NoteDrawAt(operation.scout_packet, operation.scout_sequence, operation.scout_ordinal);
  	BindState(operation.state);
-@@ -937,22 +1675,27 @@ void CommandProcessor::Execute(GpuOperation& operation) {
+@@ -937,22 +1664,27 @@ void CommandProcessor::Execute(GpuOperation& operation) {
  	BdaSubmissionSync::BeginOperation(operation.sequence);
  	auto& executor = m_renderer.GetRenderExecutor();
  	executor.UseContextId(operation.state.context_id, operation.state.user_config_id);
@@ -2011,7 +2000,7 @@ index 0262f6dc0130634a7b2769543b60435536cc4013..bc807a4186bae36af16df35d08cdf40d
  #if defined(ANYPS5_KYTY)
  			if (TimeCallbackDrains()) {
  				const auto start = std::chrono::steady_clock::now();
-@@ -966,7 +1709,29 @@ void CommandProcessor::Execute(GpuOperation& operation) {
+@@ -966,7 +1698,29 @@ void CommandProcessor::Execute(GpuOperation& operation) {
  			} else
  #endif
  			{
@@ -2042,7 +2031,7 @@ index 0262f6dc0130634a7b2769543b60435536cc4013..bc807a4186bae36af16df35d08cdf40d
  			}
  		}
  	}
-@@ -982,7 +1747,8 @@ void CommandProcessor::Execute(GpuOperation& operation) {
+@@ -982,7 +1736,8 @@ void CommandProcessor::Execute(GpuOperation& operation) {
  		bool           submit_when_idle;
  		~CommitWriteTicks() {
  			auto& scheduler = renderer.GetCommandScheduler();
@@ -2052,7 +2041,7 @@ index 0262f6dc0130634a7b2769543b60435536cc4013..bc807a4186bae36af16df35d08cdf40d
  				scheduler.Flush();
  			} else if (submit_when_idle) {
  				const auto submitted = scheduler.SubmittedTick();
-@@ -1072,7 +1838,17 @@ void CommandProcessor::BufferInit() {
+@@ -1072,7 +1827,17 @@ void CommandProcessor::BufferInit() {
  }
  
  void CommandProcessor::BufferFlush() {
@@ -2071,7 +2060,7 @@ index 0262f6dc0130634a7b2769543b60435536cc4013..bc807a4186bae36af16df35d08cdf40d
  }
  
  void CommandProcessor::NoteRecordedWork() {
-@@ -1085,20 +1861,37 @@ void CommandProcessor::NoteRecordedWork() {
+@@ -1085,20 +1850,37 @@ void CommandProcessor::NoteRecordedWork() {
  }
  
  void CommandProcessor::BufferFlushIfBatchReady() {
@@ -2112,7 +2101,7 @@ index 0262f6dc0130634a7b2769543b60435536cc4013..bc807a4186bae36af16df35d08cdf40d
  }
  
  #if defined(ANYPS5_KYTY)
-@@ -1210,9 +2003,48 @@ void CommandProcessor::WriteData(uint32_t* dst, const uint32_t* src, uint32_t dw
+@@ -1210,9 +1992,48 @@ void CommandProcessor::WriteData(uint32_t* dst, const uint32_t* src, uint32_t dw
  		return;
  	}
  
@@ -2161,7 +2150,7 @@ index 0262f6dc0130634a7b2769543b60435536cc4013..bc807a4186bae36af16df35d08cdf40d
  		if (m_renderer.WriteAroundGpuWrites(dst, data, bytes)) {
  			LibKernel::Memory::NoteEmulatorWrite(reinterpret_cast<uint64_t>(dst), bytes);
  			return;
-@@ -1225,7 +2057,7 @@ void CommandProcessor::WriteData(uint32_t* dst, const uint32_t* src, uint32_t dw
+@@ -1225,7 +2046,7 @@ void CommandProcessor::WriteData(uint32_t* dst, const uint32_t* src, uint32_t dw
  		}
  		LibKernel::Memory::NoteEmulatorWrite(reinterpret_cast<uint64_t>(dst), bytes);
  	}, {.address = reinterpret_cast<uint64_t>(dst), .data = src, .dwords = dw_num,
@@ -2170,7 +2159,7 @@ index 0262f6dc0130634a7b2769543b60435536cc4013..bc807a4186bae36af16df35d08cdf40d
  	if (write_one_address) {
  		NoteGuestWrite(sequence, reinterpret_cast<uint64_t>(dst), sizeof(uint32_t),
  		               src + dw_num - 1);
-@@ -1242,6 +2074,7 @@ void CommandProcessor::WriteReferenceClock(uint64_t dst_address, uint32_t num_by
+@@ -1242,6 +2063,7 @@ void CommandProcessor::WriteReferenceClock(uint64_t dst_address, uint32_t num_by
  		     num_bytes);
  	}
  	const auto sequence = EmitCallback([this, dst_address, num_bytes] {
@@ -2178,7 +2167,7 @@ index 0262f6dc0130634a7b2769543b60435536cc4013..bc807a4186bae36af16df35d08cdf40d
  		auto& buffers = m_renderer.GetBufferCache();
  		if (GuestRange {dst_address, num_bytes}.Valid() &&
  		    !buffers.IsRegionGpuModified(dst_address, num_bytes)) {
-@@ -1264,6 +2097,9 @@ void CommandProcessor::WriteReferenceClock(uint64_t dst_address, uint32_t num_by
+@@ -1264,6 +2086,9 @@ void CommandProcessor::WriteReferenceClock(uint64_t dst_address, uint32_t num_by
  			GetScheduler().Flush();
  			return;
  		}
@@ -2188,7 +2177,7 @@ index 0262f6dc0130634a7b2769543b60435536cc4013..bc807a4186bae36af16df35d08cdf40d
  		const auto value = Sync::ReadReferenceClock();
  		std::memcpy(reinterpret_cast<void*>(dst_address), &value, num_bytes);
  		LibKernel::Memory::NoteEmulatorWrite(dst_address, num_bytes);
-@@ -1273,7 +2109,7 @@ void CommandProcessor::WriteReferenceClock(uint64_t dst_address, uint32_t num_by
+@@ -1273,7 +2098,7 @@ void CommandProcessor::WriteReferenceClock(uint64_t dst_address, uint32_t num_by
  			     " size=%u\n",
  			     dst_address, value, num_bytes);
  		}
@@ -2197,7 +2186,7 @@ index 0262f6dc0130634a7b2769543b60435536cc4013..bc807a4186bae36af16df35d08cdf40d
  	NoteGuestWrite(sequence, dst_address, num_bytes);
  }
  
-@@ -1312,7 +2148,8 @@ void CommandProcessor::DmaData(uint8_t dst_sel, uint64_t dst_address_or_offset,
+@@ -1312,7 +2137,8 @@ void CommandProcessor::DmaData(uint8_t dst_sel, uint64_t dst_address_or_offset,
  	const auto sequence = EmitCallback([=, this] {
  		ExecuteDmaData(dst_gds, dst_address_or_offset, src_sel, src_gds,
  		               src_address_or_offset_or_immediate, num_bytes);
@@ -2207,7 +2196,7 @@ index 0262f6dc0130634a7b2769543b60435536cc4013..bc807a4186bae36af16df35d08cdf40d
  	if (!dst_gds) {
  		NoteGuestWrite(sequence, dst_address_or_offset, num_bytes);
  	}
-@@ -1338,6 +2175,7 @@ void CommandProcessor::ExecuteDmaData(bool dst_gds, uint64_t dst_address_or_offs
+@@ -1338,6 +2164,7 @@ void CommandProcessor::ExecuteDmaData(bool dst_gds, uint64_t dst_address_or_offs
  }
  
  void GuestGpu::Enqueue(Submission submission) {
@@ -2215,7 +2204,7 @@ index 0262f6dc0130634a7b2769543b60435536cc4013..bc807a4186bae36af16df35d08cdf40d
  	Common::LockGuard lock(m_queue_mutex);
  	EXIT_IF(!m_accepting);
  	if (submission.queue_id == 0 && submission.type == SubmissionType::Commands) {
-@@ -1379,11 +2217,12 @@ void GuestGpu::ThreadRun(void* data) {
+@@ -1379,11 +2206,12 @@ void GuestGpu::ThreadRun(void* data) {
  	bool                                                  spin_blocked = false;
  
  	for (;;) {
@@ -2232,7 +2221,7 @@ index 0262f6dc0130634a7b2769543b60435536cc4013..bc807a4186bae36af16df35d08cdf40d
  			spin_blocked      = false;
  			const auto epoch  = gpu->m_work_epoch.load(std::memory_order_acquire);
  			const auto target = std::chrono::steady_clock::now() + BlockedRetryInterval;
-@@ -1455,6 +2294,7 @@ void GuestGpu::ThreadRun(void* data) {
+@@ -1455,6 +2283,7 @@ void GuestGpu::ThreadRun(void* data) {
  					if (gpu->m_pipelined && now - *blocked_since < Common::SpinBudget()) {
  						spin_blocked = true;
  					} else {
@@ -2240,7 +2229,7 @@ index 0262f6dc0130634a7b2769543b60435536cc4013..bc807a4186bae36af16df35d08cdf40d
  						gpu->m_work_available.WaitFor(&gpu->m_queue_mutex, 100);
  					}
  					for (auto& queue: gpu->m_queues) {
-@@ -1486,16 +2326,22 @@ void GuestGpu::ThreadRun(void* data) {
+@@ -1486,16 +2315,22 @@ void GuestGpu::ThreadRun(void* data) {
  			return;
  		}
  
@@ -2266,7 +2255,7 @@ index 0262f6dc0130634a7b2769543b60435536cc4013..bc807a4186bae36af16df35d08cdf40d
  			}
  
  			Common::LockGuard lock(gpu->m_queue_mutex);
-@@ -1509,6 +2355,7 @@ void GuestGpu::ThreadRun(void* data) {
+@@ -1509,6 +2344,7 @@ void GuestGpu::ThreadRun(void* data) {
  		const bool complete = [&] {
  			Common::DebugCounters::ScopedTimer busy(
  			    Common::DebugCounters::Counter::GpuThreadBusyNs);
@@ -2274,7 +2263,7 @@ index 0262f6dc0130634a7b2769543b60435536cc4013..bc807a4186bae36af16df35d08cdf40d
  			return gpu->Process(submission);
  		}();
  		if (complete) {
-@@ -1654,6 +2501,7 @@ bool GuestGpu::OtherQueueWaitsOn(uint64_t address, uint64_t size) const {
+@@ -1654,6 +2490,7 @@ bool GuestGpu::OtherQueueWaitsOn(uint64_t address, uint64_t size) const {
  }
  
  bool GuestGpu::Process(Submission& submission) {
@@ -2282,7 +2271,7 @@ index 0262f6dc0130634a7b2769543b60435536cc4013..bc807a4186bae36af16df35d08cdf40d
  	m_current_queue = submission.queue_id;
  #if defined(ANYPS5_KYTY)
  	if (m_blocked_slots[m_current_queue].address.load(std::memory_order_relaxed) != 0) {
-@@ -1701,17 +2549,37 @@ bool GuestGpu::Process(Submission& submission) {
+@@ -1701,17 +2538,37 @@ bool GuestGpu::Process(Submission& submission) {
  			cp.PrepareCpuFlip(submission.flip_request_id);
  			break;
  		case SubmissionType::SuspendPoint:
@@ -2324,7 +2313,7 @@ index 0262f6dc0130634a7b2769543b60435536cc4013..bc807a4186bae36af16df35d08cdf40d
  			}
  #endif
  			cp.BufferFlush();
-@@ -1757,10 +2625,24 @@ void CommandProcessor::ProcessIndirectBuffer(std::span<const uint32_t> commands,
+@@ -1757,10 +2614,24 @@ void CommandProcessor::ProcessIndirectBuffer(std::span<const uint32_t> commands,
  	g_current_execution->m_chain       = chain;
  }
  
@@ -2350,7 +2339,7 @@ index 0262f6dc0130634a7b2769543b60435536cc4013..bc807a4186bae36af16df35d08cdf40d
  	}
  }
  
-@@ -1768,7 +2650,8 @@ const uint32_t* CommandProcessor::StageIndirectRegisters(uint32_t opcode, const
+@@ -1768,7 +2639,8 @@ const uint32_t* CommandProcessor::StageIndirectRegisters(uint32_t opcode, const
                                                           uint32_t packet_dw) {
  	if ((opcode != Pm4::IT_SET_CONTEXT_REG_INDIRECT && opcode != Pm4::IT_SET_SH_REG_INDIRECT &&
  	     opcode != Pm4::IT_SET_UCONFIG_REG_INDIRECT) ||
@@ -2360,7 +2349,7 @@ index 0262f6dc0130634a7b2769543b60435536cc4013..bc807a4186bae36af16df35d08cdf40d
  		return packet;
  	}
  	const auto     address = (uint64_t {packet[1]} & 0xfffffffcu) | (uint64_t {packet[2]} << 32u);
-@@ -1792,17 +2675,187 @@ const uint32_t* CommandProcessor::StageIndirectRegisters(uint32_t opcode, const
+@@ -1792,17 +2664,187 @@ const uint32_t* CommandProcessor::StageIndirectRegisters(uint32_t opcode, const
  	return m_indirect_packet.data();
  }
  
@@ -2549,7 +2538,7 @@ index 0262f6dc0130634a7b2769543b60435536cc4013..bc807a4186bae36af16df35d08cdf40d
  	}
  }
  
-@@ -1990,13 +3043,33 @@ void CommandProcessor::SetPredication(uint32_t condition, uint32_t op, uint32_t
+@@ -1990,13 +3032,33 @@ void CommandProcessor::SetPredication(uint32_t condition, uint32_t op, uint32_t
  					if (wait_op == 0) {
  						if (!m_occlusion_wait_requested) {
  							m_occlusion_wait_requested = true;
@@ -2564,12 +2553,12 @@ index 0262f6dc0130634a7b2769543b60435536cc4013..bc807a4186bae36af16df35d08cdf40d
 +								m_renderer.GetOcclusionQueries().CollectPendingRanges(*cb_extra);
 +								while (!m_occ_dumps.empty() && m_occ_dumps.front().first <= exec_before) {
 +									m_occ_dumps.pop_front();
-+								}
+ 								}
+-							});
 +								for (const auto& [dseq, daddr]: m_occ_dumps) {
 +									(void)dseq;
 +									cb_extra->emplace_back(daddr, daddr + 16u * 2u * sizeof(uint64_t));
- 								}
--							});
++								}
 +								EmitCallback([this] {
 +									auto& queries = m_renderer.GetOcclusionQueries();
 +									if (queries.HasPendingDumps()) {
@@ -2589,7 +2578,7 @@ index 0262f6dc0130634a7b2769543b60435536cc4013..bc807a4186bae36af16df35d08cdf40d
  						}
  						SuspendPm4();
  					} else {
-@@ -2038,6 +3111,8 @@ void CommandProcessor::CountDraw() {
+@@ -2038,6 +3100,8 @@ void CommandProcessor::CountDraw() {
  }
  
  void CommandProcessor::DrawIndex(DrawIndexArgs args) {
@@ -2598,7 +2587,7 @@ index 0262f6dc0130634a7b2769543b60435536cc4013..bc807a4186bae36af16df35d08cdf40d
  	args.index_type_and_size = m_index_type_and_size;
  	auto operation       = MakeOperation(GpuOperationKind::DrawIndex);
  	operation.draw_index = args;
-@@ -2109,6 +3184,8 @@ void CommandProcessor::DrawIndirectMulti(uint32_t data_offset, uint32_t max_coun
+@@ -2109,6 +3173,8 @@ void CommandProcessor::DrawIndirectMulti(uint32_t data_offset, uint32_t max_coun
  	                     stride_in_bytes < (indexed ? sizeof(vk::DrawIndexedIndirectCommand)
  	                                                : sizeof(vk::DrawIndirectCommand)));
  
@@ -2607,7 +2596,7 @@ index 0262f6dc0130634a7b2769543b60435536cc4013..bc807a4186bae36af16df35d08cdf40d
  	auto operation          = MakeOperation(GpuOperationKind::DrawIndirect);
  	operation.draw_indirect = {.args_base         = m_draw_indirect_args_base_addr,
  	                           .data_offset       = data_offset,
-@@ -2444,7 +3521,34 @@ void CommandProcessor::EmitHleRefitArgs() {
+@@ -2444,7 +3510,34 @@ void CommandProcessor::EmitHleRefitArgs() {
  	std::vector<uint64_t> blases(m_hle_refit_blases.begin() + static_cast<ptrdiff_t>(m_hle_refit_args),
  	                             m_hle_refit_blases.end());
  	m_hle_refit_args = m_hle_refit_blases.size();
@@ -2643,7 +2632,7 @@ index 0262f6dc0130634a7b2769543b60435536cc4013..bc807a4186bae36af16df35d08cdf40d
  		auto&                                     context = m_renderer;
  		auto&                                     cache   = context.GetBufferCache();
  		auto                                      refit   = blases;
-@@ -2460,7 +3564,12 @@ void CommandProcessor::EmitHleRefitArgs() {
+@@ -2460,7 +3553,12 @@ void CommandProcessor::EmitHleRefitArgs() {
  		auto& command = context.GetCommandScheduler().Current();
  		command.EndRendering();
  		context.GetRayTracing()->RecordHleRefit(command.Handle(), refit, {}, 2, true);
@@ -2657,7 +2646,7 @@ index 0262f6dc0130634a7b2769543b60435536cc4013..bc807a4186bae36af16df35d08cdf40d
  }
  
  void CommandProcessor::EmitHleRefit() {
-@@ -2478,7 +3587,34 @@ void CommandProcessor::EmitHleRefit() {
+@@ -2478,7 +3576,34 @@ void CommandProcessor::EmitHleRefit() {
  	if (header_layout == 2) {
  		EmitHleRefitArgs();
  	}
@@ -2693,7 +2682,7 @@ index 0262f6dc0130634a7b2769543b60435536cc4013..bc807a4186bae36af16df35d08cdf40d
  		auto&                                          context = m_renderer;
  		auto&                                          cache   = context.GetBufferCache();
  		std::vector<RayTracing::HleRefitGeometry> geometries;
-@@ -2522,7 +3658,12 @@ void CommandProcessor::EmitHleRefit() {
+@@ -2522,7 +3647,12 @@ void CommandProcessor::EmitHleRefit() {
  		auto& command = context.GetCommandScheduler().Current();
  		command.EndRendering();
  		context.GetRayTracing()->RecordHleRefit(command.Handle(), refit, geometries, header_layout);
@@ -2707,7 +2696,7 @@ index 0262f6dc0130634a7b2769543b60435536cc4013..bc807a4186bae36af16df35d08cdf40d
  }
  
  bool CommandProcessor::HleTlasBuild::Native() const {
-@@ -2612,7 +3753,28 @@ bool CommandProcessor::HleTlasDispatch(uint64_t data_addr) {
+@@ -2612,7 +3742,28 @@ bool CommandProcessor::HleTlasDispatch(uint64_t data_addr) {
  }
  
  void CommandProcessor::EmitHleTlas() {
@@ -2737,7 +2726,7 @@ index 0262f6dc0130634a7b2769543b60435536cc4013..bc807a4186bae36af16df35d08cdf40d
  		auto&                 context = m_renderer;
  		auto&                 cache   = context.GetBufferCache();
  		std::vector<uint8_t>  list;
-@@ -2676,7 +3838,10 @@ void CommandProcessor::EmitHleTlas() {
+@@ -2676,7 +3827,10 @@ void CommandProcessor::EmitHleTlas() {
  				                                            build.header, build.format);
  			}
  		}
@@ -2749,7 +2738,7 @@ index 0262f6dc0130634a7b2769543b60435536cc4013..bc807a4186bae36af16df35d08cdf40d
  }
  
  void CommandProcessor::PsrBlasDispatch(uint64_t data_addr) {
-@@ -2717,7 +3882,7 @@ void CommandProcessor::PsrBlasDispatch(uint64_t data_addr) {
+@@ -2717,7 +3871,7 @@ void CommandProcessor::PsrBlasDispatch(uint64_t data_addr) {
  		}
  		m_psr_captured[address(0)] = user[2];
  		if (!base148) {
@@ -2758,7 +2747,7 @@ index 0262f6dc0130634a7b2769543b60435536cc4013..bc807a4186bae36af16df35d08cdf40d
  		}
  		return;
  	}
-@@ -2793,12 +3958,12 @@ void CommandProcessor::GuestTlasDispatch(uint64_t data_addr) {
+@@ -2793,12 +3947,12 @@ void CommandProcessor::GuestTlasDispatch(uint64_t data_addr) {
  	using Psr::Shader;
  	const auto shader = ComputePsrShader(data_addr);
  	if (shader == Shader::MortonComputeBoundingBoxForInstances) {
@@ -2773,7 +2762,7 @@ index 0262f6dc0130634a7b2769543b60435536cc4013..bc807a4186bae36af16df35d08cdf40d
  	}
  }
  
-@@ -2806,7 +3971,7 @@ void CommandProcessor::EmitPsrBlasBuilt() {
+@@ -2806,7 +3960,7 @@ void CommandProcessor::EmitPsrBlasBuilt() {
  	if (m_psr_decompressed != 0) {
  		EmitHostCommand([this, blas = m_psr_decompressed, size = m_psr_decompressed_size] {
  			m_renderer.GetRayTracing()->NoteGuestBlasDecompressed(blas, size);
@@ -2782,7 +2771,7 @@ index 0262f6dc0130634a7b2769543b60435536cc4013..bc807a4186bae36af16df35d08cdf40d
  		m_psr_decompressed = 0;
  	}
  	if (m_psr_blas_built.blas_va == 0) {
-@@ -2814,7 +3979,7 @@ void CommandProcessor::EmitPsrBlasBuilt() {
+@@ -2814,7 +3968,7 @@ void CommandProcessor::EmitPsrBlasBuilt() {
  	}
  	EmitHostCommand([this, build = std::move(m_psr_blas_built)] {
  		m_renderer.GetRayTracing()->NoteGuestBlasBuilds(std::span(&build, 1));
@@ -2791,7 +2780,7 @@ index 0262f6dc0130634a7b2769543b60435536cc4013..bc807a4186bae36af16df35d08cdf40d
  	m_psr_blas_built = {};
  }
  
-@@ -2827,6 +3992,8 @@ void CommandProcessor::DispatchDirect(uint32_t thread_group_x, uint32_t thread_g
+@@ -2827,6 +3981,8 @@ void CommandProcessor::DispatchDirect(uint32_t thread_group_x, uint32_t thread_g
  	}
  	GuestTlasDispatch(GetShCtx().GetCs().cs_regs.data_addr);
  	GetShCtx().SetCsWaveSize(Pm4::ComputeWaveSize(mode));
@@ -2800,7 +2789,7 @@ index 0262f6dc0130634a7b2769543b60435536cc4013..bc807a4186bae36af16df35d08cdf40d
  	auto operation     = MakeOperation(GpuOperationKind::DispatchDirect);
  	operation.dispatch = {.thread_group_x = thread_group_x,
  	                      .thread_group_y = thread_group_y,
-@@ -2848,9 +4015,15 @@ void CommandProcessor::ExecuteDispatchDirect(const GpuOperation& operation, uint
+@@ -2848,9 +4004,15 @@ void CommandProcessor::ExecuteDispatchDirect(const GpuOperation& operation, uint
  
  void CommandProcessor::ProcessPssr(const Pssr::Request& request) {
  	EXIT_NOT_IMPLEMENTED(IsAsyncComputeQueue());
@@ -2818,7 +2807,7 @@ index 0262f6dc0130634a7b2769543b60435536cc4013..bc807a4186bae36af16df35d08cdf40d
  }
  
  void CommandProcessor::DispatchIndirect(uint64_t args_addr, uint32_t mode) {
-@@ -2862,6 +4035,8 @@ void CommandProcessor::DispatchIndirect(uint64_t args_addr, uint32_t mode) {
+@@ -2862,6 +4024,8 @@ void CommandProcessor::DispatchIndirect(uint64_t args_addr, uint32_t mode) {
  	GuestTlasDispatch(GetShCtx().GetCs().cs_regs.data_addr);
  	EXIT_NOT_IMPLEMENTED(args_addr == 0 || (args_addr & 3u) != 0);
  	GetShCtx().SetCsWaveSize(Pm4::ComputeWaveSize(mode));
@@ -2827,7 +2816,7 @@ index 0262f6dc0130634a7b2769543b60435536cc4013..bc807a4186bae36af16df35d08cdf40d
  	auto operation     = MakeOperation(GpuOperationKind::DispatchIndirect);
  	operation.dispatch = {.mode = mode, .args_addr = args_addr};
  	Emit(std::move(operation));
-@@ -2883,6 +4058,8 @@ void CommandProcessor::ExecuteDispatchIndirect(const GpuOperation& operation) {
+@@ -2883,6 +4047,8 @@ void CommandProcessor::ExecuteDispatchIndirect(const GpuOperation& operation) {
  }
  
  void CommandProcessor::DrawIndexAuto(DrawAutoArgs args) {
@@ -2836,7 +2825,7 @@ index 0262f6dc0130634a7b2769543b60435536cc4013..bc807a4186bae36af16df35d08cdf40d
  	auto operation      = MakeOperation(GpuOperationKind::DrawAuto);
  	operation.draw_auto = args;
  	Emit(std::move(operation));
-@@ -2897,10 +4074,11 @@ void CommandProcessor::ExecuteDrawAuto(const GpuOperation& operation, DrawAutoAr
+@@ -2897,10 +4063,11 @@ void CommandProcessor::ExecuteDrawAuto(const GpuOperation& operation, DrawAutoAr
  }
  
  void CommandProcessor::WaitFlipDone(const uint64_t* label) {
@@ -2849,7 +2838,7 @@ index 0262f6dc0130634a7b2769543b60435536cc4013..bc807a4186bae36af16df35d08cdf40d
  }
  
  void CommandProcessor::ReleaseMem(uint32_t data_sel, uint32_t interrupt_selector, void* address,
-@@ -2927,13 +4105,31 @@ void CommandProcessor::ReleaseMem(uint32_t data_sel, uint32_t interrupt_selector
+@@ -2927,13 +4094,31 @@ void CommandProcessor::ReleaseMem(uint32_t data_sel, uint32_t interrupt_selector
  		WriteBackImages();
  	}
  	if (data_sel == 0 && !interrupt) {
@@ -2885,7 +2874,7 @@ index 0262f6dc0130634a7b2769543b60435536cc4013..bc807a4186bae36af16df35d08cdf40d
  	switch (data_sel) {
  		case 1: {
  			const auto value = static_cast<uint32_t>(data);
-@@ -3017,11 +4213,36 @@ bool CommandProcessor::LabelsAroundGpuWrites() {
+@@ -3017,11 +4202,36 @@ bool CommandProcessor::LabelsAroundGpuWrites() {
  #endif
  void CommandProcessor::ExecuteReleaseMem(uint32_t data_sel, bool interrupt, void* address,
                                           uint64_t data, uint32_t interrupt_context_id) {
@@ -2923,7 +2912,7 @@ index 0262f6dc0130634a7b2769543b60435536cc4013..bc807a4186bae36af16df35d08cdf40d
  		if (!GuestRange {vaddr, size}.Valid() || !buffers.IsRegionGpuModified(vaddr, size) ||
  		    buffers.HasGpuDirtyBytes(vaddr, size) ||
  		    !LibKernel::Memory::TryWriteBacking(vaddr, value, size)) {
-@@ -3038,15 +4259,23 @@ void CommandProcessor::ExecuteReleaseMem(uint32_t data_sel, bool interrupt, void
+@@ -3038,15 +4248,23 @@ void CommandProcessor::ExecuteReleaseMem(uint32_t data_sel, bool interrupt, void
  #else
  	const auto labels_pending = [this] { return m_deferred_labels.load(std::memory_order_acquire); };
  #endif
@@ -2949,7 +2938,7 @@ index 0262f6dc0130634a7b2769543b60435536cc4013..bc807a4186bae36af16df35d08cdf40d
  		                    !buffers.HasGpuDirtyBytes(vaddr, size) &&
  		                    LibKernel::Memory::FindBackingPointer(vaddr, size) != nullptr;
  #else
-@@ -3136,17 +4365,32 @@ void CommandProcessor::WriteBackImages() {
+@@ -3136,17 +4354,32 @@ void CommandProcessor::WriteBackImages() {
  	if (!m_renderer.GetTextureCache().StorageReadbackEnabled()) {
  		return;
  	}
@@ -2984,7 +2973,7 @@ index 0262f6dc0130634a7b2769543b60435536cc4013..bc807a4186bae36af16df35d08cdf40d
  		    renderer.TriggerInterrupt(event_id, interrupt_context_id);
  	    },
  	    true);
-@@ -3162,11 +4406,58 @@ void CommandProcessor::TriggerEvent(uint32_t event_type, uint32_t event_index,
+@@ -3162,11 +4395,58 @@ void CommandProcessor::TriggerEvent(uint32_t event_type, uint32_t event_index,
  		     event_type, event_index, event_address);
  	}
  
@@ -3044,7 +3033,7 @@ index 0262f6dc0130634a7b2769543b60435536cc4013..bc807a4186bae36af16df35d08cdf40d
  	}
  }
  
-@@ -3212,6 +4503,9 @@ void CommandProcessor::ExecuteTriggerEvent(uint32_t event_type, uint32_t event_i
+@@ -3212,6 +4492,9 @@ void CommandProcessor::ExecuteTriggerEvent(uint32_t event_type, uint32_t event_i
  				queries.Dump(GetScheduler(), event_address);
  				break;
  			}
@@ -3054,7 +3043,7 @@ index 0262f6dc0130634a7b2769543b60435536cc4013..bc807a4186bae36af16df35d08cdf40d
  			static std::once_flag warning_once;
  			std::call_once(warning_once, [] {
  				std::printf("Warning: game uses occlusion queries, which are treated as always "
-@@ -3242,15 +4536,22 @@ void CommandProcessor::ExecuteTriggerEvent(uint32_t event_type, uint32_t event_i
+@@ -3242,15 +4525,22 @@ void CommandProcessor::ExecuteTriggerEvent(uint32_t event_type, uint32_t event_i
  }
  
  void CommandProcessor::WriteLodStats(void* dst, uint32_t size, uint32_t control) {
@@ -3079,7 +3068,7 @@ index 0262f6dc0130634a7b2769543b60435536cc4013..bc807a4186bae36af16df35d08cdf40d
  
  	EmitCallback([this, handle, index, flip_mode, flip_arg] {
  		auto& command = CurrentBuffer();
-@@ -3268,7 +4569,7 @@ void CommandProcessor::Flip(int handle, int index, int flip_mode, int64_t flip_a
+@@ -3268,7 +4558,7 @@ void CommandProcessor::Flip(int handle, int index, int flip_mode, int64_t flip_a
  		    true);
  #endif
  		GetScheduler().Flush();
@@ -3088,7 +3077,7 @@ index 0262f6dc0130634a7b2769543b60435536cc4013..bc807a4186bae36af16df35d08cdf40d
  }
  
  void CommandProcessor::PrepareCpuFlip(uint64_t request_id) {
-@@ -3276,6 +4577,7 @@ void CommandProcessor::PrepareCpuFlip(uint64_t request_id) {
+@@ -3276,6 +4566,7 @@ void CommandProcessor::PrepareCpuFlip(uint64_t request_id) {
  		EXIT("invalid graphics-thread CPU flip preparation\n");
  	}
  	m_renderer.CollectHotPageWrites();
@@ -3096,7 +3085,7 @@ index 0262f6dc0130634a7b2769543b60435536cc4013..bc807a4186bae36af16df35d08cdf40d
  	EmitCallback([this, request_id] {
  		struct ProcessorScope {
  			explicit ProcessorScope(CommandProcessor& processor) {
-@@ -3297,7 +4599,7 @@ void CommandProcessor::PrepareCpuFlip(uint64_t request_id) {
+@@ -3297,7 +4588,7 @@ void CommandProcessor::PrepareCpuFlip(uint64_t request_id) {
  		    [this, request_id] { m_renderer.GetVideoOut().CompleteFlip(request_id); }, true);
  #endif
  		GetScheduler().Flush();
@@ -3105,7 +3094,7 @@ index 0262f6dc0130634a7b2769543b60435536cc4013..bc807a4186bae36af16df35d08cdf40d
  }
  
  void GuestGpu::RunUrgentCommandsWhileWaiting() {
-@@ -3317,3 +4619,4 @@ bool GuestGpu::IsCommandProcessorThread() noexcept {
+@@ -3317,3 +4608,4 @@ bool GuestGpu::IsCommandProcessorThread() noexcept {
  }
  
  // Saros-Recomp change notice: Saros-Recomp modified this file for its Windows renderer. Recorded source revisions: 2026-11-21, 2026-11-22. Public source revision: 2026-11-22.
@@ -4452,10 +4441,10 @@ index 992dd76cfb0f87b1b5b8c0b794d383f379375c4f..cfd58ab56e1d4c3978e1e35b40f8c63f
  // Saros-Recomp change notice: Saros-Recomp modified this file for its Windows renderer. Recorded source revision: 2026-11-21. Public source revision: 2026-11-22.
 +// Saros-Recomp modified this file for the experimental Windows renderer on 2026-11-27.
 diff --git a/core/kyty/graphics/host_gpu/renderer/SarosDispatchTimer.h b/core/kyty/graphics/host_gpu/renderer/SarosDispatchTimer.h
-index 521afe97c2bdfc0dc4da5274f45d5a7ff2100200..1dacf04d07d2b51cd7c8fa70764394b9c0598621 100644
+index 521afe97c2bdfc0dc4da5274f45d5a7ff2100200..b5f16ad154bec429f2704352dc9cdf4fe96b2431 100644
 --- a/core/kyty/graphics/host_gpu/renderer/SarosDispatchTimer.h
 +++ b/core/kyty/graphics/host_gpu/renderer/SarosDispatchTimer.h
-@@ -1,19 +1,418 @@
+@@ -1,31 +1,436 @@
  #pragma once
  
 +#include "common/frameCensus.h"
@@ -4875,7 +4864,15 @@ index 521afe97c2bdfc0dc4da5274f45d5a7ff2100200..1dacf04d07d2b51cd7c8fa70764394b9
  	static const bool enabled = [] {
  		const char* value = std::getenv("KYTY_SAROS_DISPATCH_TIMER");
  		return value && std::string_view(value) == "1";
-@@ -25,7 +424,9 @@ inline vk::QueryPool BeginSarosDispatchSample(RenderContext& context, const Comm
+ 	}();
+ 	if (!enabled) return {};
++	const bool in_rendering = context.GetCommandScheduler().Current().IsRendering();
++	auto& graphics = context.GetGraphics();
++	// An active render pass needs a host-side reset. Device setup enables that feature for occlusion queries.
++	if (in_rendering && !graphics.occlusion_queries_enabled) return {};
+ 	static const auto extra = [] {
+ 		const char* value = std::getenv("KYTY_EXTRA_TIMED_SHADER");
+ 		return value == nullptr ? 0ull : std::strtoull(value, nullptr, 16);
  	}();
  	if ((extra == 0 || code != extra)) {
  		const int frame = context.GetGpu().GetFrameNum();
@@ -4886,12 +4883,21 @@ index 521afe97c2bdfc0dc4da5274f45d5a7ff2100200..1dacf04d07d2b51cd7c8fa70764394b9
  		static thread_local int last_frame = -1;
  		static thread_local unsigned count = 0;
  		if (last_frame != frame) { last_frame = frame; count = 0; }
-@@ -60,14 +461,15 @@ inline vk::QueryPool BeginSarosDispatchSample(RenderContext& context, const Comm
+@@ -40,7 +445,6 @@ inline vk::QueryPool BeginSarosDispatchSample(RenderContext& context, const Comm
+ 		}
+ 		++count;
+ 	}
+-	auto& graphics = context.GetGraphics();
+ 	static const bool supported = [&] {
+ 		uint32_t count = 0;
+ 		graphics.physical_device.getQueueFamilyProperties(&count, nullptr);
+@@ -60,14 +464,16 @@ inline vk::QueryPool BeginSarosDispatchSample(RenderContext& context, const Comm
  		std::fprintf(stderr, "[saros-gpu-clock] query allocation failed\n");
  		return {};
  	}
 -	command.sarosDispatchTimestamp(pool, true);
-+	command.sarosDispatchTimestamp(pool, true, stage);
++	if (in_rendering) graphics.device.resetQueryPool(pool, 0, 2);
++	command.sarosDispatchTimestamp(pool, true, stage, !in_rendering);
  	return pool;
  }
  
@@ -4905,7 +4911,7 @@ index 521afe97c2bdfc0dc4da5274f45d5a7ff2100200..1dacf04d07d2b51cd7c8fa70764394b9
  	const auto device = context.GetGraphics().device;
  	const double period = context.GetGraphics().physical_device_properties.limits.timestampPeriod;
  	auto& scheduler = context.GetCommandScheduler();
-@@ -77,8 +479,9 @@ inline void EndSarosDispatchSample(RenderContext& context, const CommandRecorder
+@@ -77,8 +483,9 @@ inline void EndSarosDispatchSample(RenderContext& context, const CommandRecorder
  		const auto result = device.getQueryPoolResults(pool, 0, 2, sizeof(clocks), clocks, sizeof(uint64_t),
  		                                                vk::QueryResultFlagBits::e64);
  		if (result == vk::Result::eSuccess) {
@@ -4917,7 +4923,7 @@ index 521afe97c2bdfc0dc4da5274f45d5a7ff2100200..1dacf04d07d2b51cd7c8fa70764394b9
  		} else {
  			std::fprintf(stderr, "[saros-gpu-clock] unavailable after completed tick=%" PRIu64 " result=%d\n",
  			             tick, static_cast<int>(result));
-@@ -89,3 +492,4 @@ inline void EndSarosDispatchSample(RenderContext& context, const CommandRecorder
+@@ -89,3 +496,4 @@ inline void EndSarosDispatchSample(RenderContext& context, const CommandRecorder
  }
  
  // Saros-Recomp change notice: Saros-Recomp added this file for its Windows renderer. Recorded source revisions: 2026-11-21, 2026-11-22. Public source revision: 2026-11-22.
@@ -5023,7 +5029,7 @@ index 0000000000000000000000000000000000000000..9f56f0ae979ba8c320ff0f3652d74657
 +
 +// Saros-Recomp modified this file for the experimental Windows renderer on 2026-11-27.
 diff --git a/core/kyty/graphics/host_gpu/renderer/cache/bufferCache.cpp b/core/kyty/graphics/host_gpu/renderer/cache/bufferCache.cpp
-index 68bf95d2fedca8a7c131f057bdbfe292fe137bb6..9003e9ffdc184fcb38ddb717cbe493eabfee0592 100644
+index 68bf95d2fedca8a7c131f057bdbfe292fe137bb6..a2641ba7bb92b9e0e1245a3468d14b9b4c8830c1 100644
 --- a/core/kyty/graphics/host_gpu/renderer/cache/bufferCache.cpp
 +++ b/core/kyty/graphics/host_gpu/renderer/cache/bufferCache.cpp
 @@ -1,3 +1,6 @@
@@ -6158,17 +6164,21 @@ index 68bf95d2fedca8a7c131f057bdbfe292fe137bb6..9003e9ffdc184fcb38ddb717cbe493ea
  		if (const auto inflight = InFlightReadbackTick(pages_begin, pages_end); inflight != 0) {
  			m_scheduler.Wait(inflight);
  			m_scheduler.WaitPriorityOperations(inflight);
-@@ -587,7 +1517,9 @@ void BufferCache::ReadMemory(uint64_t vaddr, uint64_t size, bool is_write, bool
+@@ -587,7 +1517,13 @@ void BufferCache::ReadMemory(uint64_t vaddr, uint64_t size, bool is_write, bool
  void BufferCache::ReadMemoryAsync(uint64_t vaddr, uint64_t size, bool is_write, bool guest_fault) {
  	const bool command_processor = GuestGpu::IsCommandProcessorThread();
  	const auto started           = SteadyNs();
++#ifdef _WIN32
 +	if (!command_processor) Common::FrameCensus::Trace(Common::FrameCensus::TraceGuestReadBegin, GetCurrentThreadId());
++#endif
  	ReadMemoryAsyncTimed(vaddr, size, is_write, guest_fault, command_processor);
++#ifdef _WIN32
 +	if (!command_processor) Common::FrameCensus::Trace(Common::FrameCensus::TraceGuestReadEnd, GetCurrentThreadId());
++#endif
  	auto&      stats   = g_readback_stats;
  	const auto elapsed = static_cast<uint64_t>(SteadyNs() - started);
  	(command_processor ? stats.cp_reads : stats.other_reads).fetch_add(1, std::memory_order_relaxed);
-@@ -658,7 +1590,198 @@ void BufferCache::LogWriteBlockSummary() {
+@@ -658,7 +1594,198 @@ void BufferCache::LogWriteBlockSummary() {
  	    static_cast<double>(opened) / (1024.0 * 1024.0)));
  }
  
@@ -6367,7 +6377,7 @@ index 68bf95d2fedca8a7c131f057bdbfe292fe137bb6..9003e9ffdc184fcb38ddb717cbe493ea
  	LogWriteBlockSummary();
  	BdaSubmissionSync::Log();
  	auto&      stats = g_readback_stats;
-@@ -682,12 +1805,28 @@ void BufferCache::LogReadbackSummary() {
+@@ -682,12 +1809,28 @@ void BufferCache::LogReadbackSummary() {
  	const auto false_share = stats.other_false_sharing.exchange(0, std::memory_order_relaxed);
  	const auto staged      = stats.cp_staged.exchange(0, std::memory_order_relaxed);
  	const auto replayed    = stats.other_replayed.exchange(0, std::memory_order_relaxed);
@@ -6402,7 +6412,7 @@ index 68bf95d2fedca8a7c131f057bdbfe292fe137bb6..9003e9ffdc184fcb38ddb717cbe493ea
  	if (cp_reads + other_reads + staged + replayed == 0) {
  		return;
  	}
-@@ -698,141 +1837,565 @@ void BufferCache::LogReadbackSummary() {
+@@ -698,143 +1841,567 @@ void BufferCache::LogReadbackSummary() {
  	    "tables read without a fault; other threads {} readbacks in {:.3f} s ({} of faulted reads on bytes the GPU "
  	    "wrote, {} on other bytes of a GPU written page, {} on other bytes replayed on the backing view without a readback; "
  	    "{:.3f} s handing them to the execution thread, {:.3f} s waiting for the GPU copy, {:.3f} s releasing them through "
@@ -7035,9 +7045,9 @@ index 68bf95d2fedca8a7c131f057bdbfe292fe137bb6..9003e9ffdc184fcb38ddb717cbe493ea
  			ReleaseReadback(vaddr, size, pages_begin, pages_end, tick, is_write);
  		});
 +		return;
-+	}
-+}
-+
+ 	}
+ }
+ 
 +// A guest thread came for bytes the GPU wrote into a buffer that is guest memory.  Nothing is copied: the
 +// result is the tick of the last write to wait for, or 0 when the GPU is done with them.
 +uint64_t BufferCache::GuestMemoryReadbackTick(Buffer& buffer, uint64_t vaddr, uint64_t size, uint64_t pages_begin,
@@ -7067,7 +7077,7 @@ index 68bf95d2fedca8a7c131f057bdbfe292fe137bb6..9003e9ffdc184fcb38ddb717cbe493ea
 +	auto& master = m_scheduler.GetMasterSemaphore();
 +	if (!master.IsFree(needed)) {
 +		master.Refresh();
- 	}
++	}
 +	if (master.IsFree(needed)) {
 +		m_alias_stats.reads_ready++;
 +		return 0;
@@ -7076,10 +7086,12 @@ index 68bf95d2fedca8a7c131f057bdbfe292fe137bb6..9003e9ffdc184fcb38ddb717cbe493ea
 +	m_memory_tracker.ClearHostGpuDirty(pages_begin, pages_end - pages_begin);
 +	m_inflight_readbacks.push_back({pages_begin, pages_end, needed});
 +	return needed;
- }
- 
++}
++
  void BufferCache::NoteGuestReadPages(uint64_t pages_begin, uint64_t pages_end) {
-@@ -849,17 +2412,29 @@ void BufferCache::NoteGuestReadPages(uint64_t pages_begin, uint64_t pages_end) {
+ 	const auto read = ++m_guest_reads;
+ 	for (auto page = pages_begin; page < pages_end; page += TRACKER_PAGE_SIZE) {
+@@ -849,17 +2416,29 @@ void BufferCache::NoteGuestReadPages(uint64_t pages_begin, uint64_t pages_end) {
  		}
  		found->read = read;
  	}
@@ -7114,7 +7126,7 @@ index 68bf95d2fedca8a7c131f057bdbfe292fe137bb6..9003e9ffdc184fcb38ddb717cbe493ea
  	m_gpu_modified_ranges.ForEachInRange(pages_begin, pages_end - pages_begin, [&](uint64_t start,
  	                                                                              uint64_t end) {
  		const auto latest = m_write_ticks.Latest(start, end);
-@@ -870,7 +2445,7 @@ bool BufferCache::StartReadbackQueueRead(const Buffer& buffer, uint64_t vaddr, u
+@@ -870,7 +2449,7 @@ bool BufferCache::StartReadbackQueueRead(const Buffer& buffer, uint64_t vaddr, u
  			unknown |= pending < end && start < pending + bytes;
  		}
  	});
@@ -7123,7 +7135,7 @@ index 68bf95d2fedca8a7c131f057bdbfe292fe137bb6..9003e9ffdc184fcb38ddb717cbe493ea
  		return false;
  	}
  	ReadbackQueueSlot* slot = nullptr;
-@@ -881,6 +2456,7 @@ bool BufferCache::StartReadbackQueueRead(const Buffer& buffer, uint64_t vaddr, u
+@@ -881,6 +2460,7 @@ bool BufferCache::StartReadbackQueueRead(const Buffer& buffer, uint64_t vaddr, u
  		}
  	}
  	if (slot == nullptr) {
@@ -7131,7 +7143,7 @@ index 68bf95d2fedca8a7c131f057bdbfe292fe137bb6..9003e9ffdc184fcb38ddb717cbe493ea
  		return false;
  	}
  	read.copies.clear();
-@@ -891,25 +2467,23 @@ bool BufferCache::StartReadbackQueueRead(const Buffer& buffer, uint64_t vaddr, u
+@@ -891,25 +2471,23 @@ bool BufferCache::StartReadbackQueueRead(const Buffer& buffer, uint64_t vaddr, u
  		return false;
  	}
  	if (followers) {
@@ -7170,7 +7182,7 @@ index 68bf95d2fedca8a7c131f057bdbfe292fe137bb6..9003e9ffdc184fcb38ddb717cbe493ea
  			}
  			uint64_t latest       = m_device_address_tick;
  			bool     page_unknown = false;
-@@ -923,25 +2497,42 @@ bool BufferCache::StartReadbackQueueRead(const Buffer& buffer, uint64_t vaddr, u
+@@ -923,25 +2501,42 @@ bool BufferCache::StartReadbackQueueRead(const Buffer& buffer, uint64_t vaddr, u
  					                                         pending < finish && start < pending + bytes;
  				                                     }
  			                                     });
@@ -7219,7 +7231,7 @@ index 68bf95d2fedca8a7c131f057bdbfe292fe137bb6..9003e9ffdc184fcb38ddb717cbe493ea
  	auto& queue  = slot->queue;
  	auto& device = m_graphics.device;
  	if (!queue.pool) {
-@@ -967,13 +2558,133 @@ bool BufferCache::StartReadbackQueueRead(const Buffer& buffer, uint64_t vaddr, u
+@@ -967,13 +2562,133 @@ bool BufferCache::StartReadbackQueueRead(const Buffer& buffer, uint64_t vaddr, u
  		    vk::BufferUsageFlagBits::eTransferDst,
  		    std::max<uint64_t>(Common::AlignUp(read.total_size, 1024 * 1024), 1024 * 1024));
  	}
@@ -7354,36 +7366,29 @@ index 68bf95d2fedca8a7c131f057bdbfe292fe137bb6..9003e9ffdc184fcb38ddb717cbe493ea
  	                   static_cast<uint32_t>(read.copies.size()), read.copies.data());
  	for (const auto& follower: read.followers) {
  		command.copyBuffer(follower.source, queue.staging->Handle(),
-@@ -990,60 +2701,102 @@ bool BufferCache::StartReadbackQueueRead(const Buffer& buffer, uint64_t vaddr, u
+@@ -990,60 +2705,96 @@ bool BufferCache::StartReadbackQueueRead(const Buffer& buffer, uint64_t vaddr, u
  	command.pipelineBarrier(vk::PipelineStageFlagBits::eTransfer, vk::PipelineStageFlagBits::eHost,
  	                        {}, 0, nullptr, 1, &after, 0, nullptr);
  	(void)command.end();
 -	const auto                      semaphore  = m_scheduler.GetMasterSemaphore().Handle();
 -	const vk::PipelineStageFlags    wait_stage = vk::PipelineStageFlagBits::eTransfer;
-+	static const bool skip_done_wait = [] {
-+		const char* value = std::getenv("KYTY_READBACK_SKIP_DONE_WAIT");
-+		return value != nullptr && value[0] == '1';
-+	}();
-+	const bool                      wait_timeline = !skip_done_wait || !m_scheduler.IsFree(read.needed);
-+	const auto                      semaphore     = m_scheduler.GetMasterSemaphore().Handle();
-+	const vk::PipelineStageFlags    wait_stage    = vk::PipelineStageFlagBits::eTransfer;
++	// The semaphore wait makes graphics writes visible to this transfer queue.
++	const auto semaphore = m_scheduler.GetMasterSemaphore().Handle();
++	const vk::PipelineStageFlags wait_stage = vk::PipelineStageFlagBits::eTransfer;
  	vk::TimelineSemaphoreSubmitInfo timeline {};
  	timeline.waitSemaphoreValueCount = 1;
 -	timeline.pWaitSemaphoreValues    = &needed;
-+	timeline.pWaitSemaphoreValues    = &read.needed;
++	timeline.pWaitSemaphoreValues = &read.needed;
  	vk::SubmitInfo submit {};
 -	submit.pNext              = &timeline;
--	submit.waitSemaphoreCount = 1;
++	submit.pNext = &timeline;
+ 	submit.waitSemaphoreCount = 1;
 -	submit.pWaitSemaphores    = &semaphore;
 -	submit.pWaitDstStageMask  = &wait_stage;
-+	if (wait_timeline) {
-+		submit.pNext              = &timeline;
-+		submit.waitSemaphoreCount = 1;
-+		submit.pWaitSemaphores    = &semaphore;
-+		submit.pWaitDstStageMask  = &wait_stage;
-+	}
++	submit.pWaitSemaphores = &semaphore;
++	submit.pWaitDstStageMask = &wait_stage;
  	submit.commandBufferCount = 1;
- 	submit.pCommandBuffers    = &command;
+-	submit.pCommandBuffers    = &command;
 -	if (m_graphics.readback_queue.submit(1, &submit, queue.fence) != vk::Result::eSuccess) {
 -		EXIT("BufferCache: readback queue submission failed\n");
 -	}
@@ -7405,12 +7410,7 @@ index 68bf95d2fedca8a7c131f057bdbfe292fe137bb6..9003e9ffdc184fcb38ddb717cbe493ea
 -	for (const auto& follower: read.followers) {
 -		m_inflight_readbacks.push_back({follower.page, follower.page + TRACKER_PAGE_SIZE, read.recorded});
 -		ranges.emplace_back(follower.page, TRACKER_PAGE_SIZE);
-+	bool was_incomplete = false;
-+	if (census) {
-+		auto& master = m_scheduler.GetMasterSemaphore();
-+		master.Refresh();
-+		was_incomplete = !master.IsFree(read.needed);
- 	}
+-	}
 -	m_scheduler.DeferPriorityOperation(
 -	    [published = read.published] { published->wait(false, std::memory_order_acquire); }, ranges);
 -	return true;
@@ -7420,6 +7420,13 @@ index 68bf95d2fedca8a7c131f057bdbfe292fe137bb6..9003e9ffdc184fcb38ddb717cbe493ea
 -	for (auto& slot: m_readback_slots) {
 -		if (slot.busy.load(std::memory_order_acquire) && (slot.source == buffer || slot.many)) {
 -			(void)m_graphics.device.waitForFences(1, &slot.queue.fence, VK_TRUE, UINT64_MAX);
++	submit.pCommandBuffers = &command;
++	bool was_incomplete = false;
++	if (census) {
++		auto& master = m_scheduler.GetMasterSemaphore();
++		master.Refresh();
++		was_incomplete = !master.IsFree(read.needed);
++	}
 +	const auto submitted_at = census ? SteadyNs() : 0;
 +	{
 +		std::lock_guard lock(m_readback_queue_mutex);
@@ -7500,7 +7507,7 @@ index 68bf95d2fedca8a7c131f057bdbfe292fe137bb6..9003e9ffdc184fcb38ddb717cbe493ea
  	queue.staging->Invalidate(0, read.total_size);
  	const auto* mapped = queue.staging->Mapped().data();
  	for (const auto& copy: read.copies) {
-@@ -1057,8 +2810,7 @@ void BufferCache::FinishReadbackQueueRead(ReadbackQueueRead& read) {
+@@ -1057,8 +2808,7 @@ void BufferCache::FinishReadbackQueueRead(ReadbackQueueRead& read) {
  		}
  	}
  	read.slot->busy.store(false, std::memory_order_release);
@@ -7510,7 +7517,7 @@ index 68bf95d2fedca8a7c131f057bdbfe292fe137bb6..9003e9ffdc184fcb38ddb717cbe493ea
  }
  
  uint64_t BufferCache::InFlightReadbackTick(uint64_t begin, uint64_t end) const {
-@@ -1140,83 +2892,391 @@ void BufferCache::InvalidateCopyFeedback(uint64_t vaddr, uint64_t size) noexcept
+@@ -1140,83 +2890,391 @@ void BufferCache::InvalidateCopyFeedback(uint64_t vaddr, uint64_t size) noexcept
  		const auto& slot  = feedback.slots[prior->second];
  		if (slot.address + slot.size > vaddr) it = prior;
  	}
@@ -7968,7 +7975,7 @@ index 68bf95d2fedca8a7c131f057bdbfe292fe137bb6..9003e9ffdc184fcb38ddb717cbe493ea
  }
  
  bool BufferCache::TryReadCopyFeedback(Buffer& buffer, uint64_t vaddr, uint64_t size) {
-@@ -1225,7 +3285,7 @@ bool BufferCache::TryReadCopyFeedback(Buffer& buffer, uint64_t vaddr, uint64_t s
+@@ -1225,7 +3283,7 @@ bool BufferCache::TryReadCopyFeedback(Buffer& buffer, uint64_t vaddr, uint64_t s
  	const auto end   = Common::AlignUp(vaddr + size, TRACKER_PAGE_SIZE);
  	if (!buffer.IsInBounds(begin, end - begin) || end - begin > CopyFeedback::SlotSize ||
  	    m_texture_cache.IsRegionRegistered(begin, end - begin)) {
@@ -7977,7 +7984,7 @@ index 68bf95d2fedca8a7c131f057bdbfe292fe137bb6..9003e9ffdc184fcb38ddb717cbe493ea
  	}
  	std::vector<std::pair<uint64_t, uint64_t>> copies;
  	m_memory_tracker.ForEachDownloadRange<false>(begin, end - begin, [&](uint64_t address, uint64_t bytes) noexcept {
-@@ -1233,7 +3293,7 @@ bool BufferCache::TryReadCopyFeedback(Buffer& buffer, uint64_t vaddr, uint64_t s
+@@ -1233,7 +3291,7 @@ bool BufferCache::TryReadCopyFeedback(Buffer& buffer, uint64_t vaddr, uint64_t s
  		m_gpu_modified_ranges.ForEachInRange(address, bytes,
  		                                     [&](uint64_t first, uint64_t last) { copies.emplace_back(first, last - first); });
  	});
@@ -7986,7 +7993,7 @@ index 68bf95d2fedca8a7c131f057bdbfe292fe137bb6..9003e9ffdc184fcb38ddb717cbe493ea
  	struct Part {
  		uint64_t address, size, offset;
  	};
-@@ -1245,13 +3305,13 @@ bool BufferCache::TryReadCopyFeedback(Buffer& buffer, uint64_t vaddr, uint64_t s
+@@ -1245,13 +3303,13 @@ bool BufferCache::TryReadCopyFeedback(Buffer& buffer, uint64_t vaddr, uint64_t s
  		auto cursor = address;
  		while (cursor < address + bytes_in) {
  			auto it = feedback.UpperBound(cursor);
@@ -8003,7 +8010,7 @@ index 68bf95d2fedca8a7c131f057bdbfe292fe137bb6..9003e9ffdc184fcb38ddb717cbe493ea
  			}
  			const auto bytes = std::min(address + bytes_in, slot.address + slot.size) - cursor;
  			parts.push_back({cursor, bytes, it->second * CopyFeedback::SlotSize + cursor - slot.address});
-@@ -1259,9 +3319,9 @@ bool BufferCache::TryReadCopyFeedback(Buffer& buffer, uint64_t vaddr, uint64_t s
+@@ -1259,9 +3317,9 @@ bool BufferCache::TryReadCopyFeedback(Buffer& buffer, uint64_t vaddr, uint64_t s
  			cursor += bytes;
  		}
  	}
@@ -8015,7 +8022,7 @@ index 68bf95d2fedca8a7c131f057bdbfe292fe137bb6..9003e9ffdc184fcb38ddb717cbe493ea
  	for (const auto& part: parts) feedback.download.Invalidate(part.offset, part.size);
  	for (const auto& part: parts) {
  		LibKernel::Memory::WriteBacking(part.address, feedback.download.Mapped().data() + part.offset, part.size);
-@@ -1277,9 +3337,9 @@ bool BufferCache::TryReadCopyFeedback(Buffer& buffer, uint64_t vaddr, uint64_t s
+@@ -1277,9 +3335,9 @@ bool BufferCache::TryReadCopyFeedback(Buffer& buffer, uint64_t vaddr, uint64_t s
  }
  
  bool BufferCache::TryGuestReadFromFeedback(uint64_t vaddr, uint64_t size, bool is_write) {
@@ -8027,7 +8034,7 @@ index 68bf95d2fedca8a7c131f057bdbfe292fe137bb6..9003e9ffdc184fcb38ddb717cbe493ea
  	auto first = vaddr, last = vaddr + size;
  	if (auto it = feedback.UpperBound(vaddr); it != feedback.index.begin()) {
  		const auto& slot = feedback.slots[std::prev(it)->second];
-@@ -1288,14 +3348,16 @@ bool BufferCache::TryGuestReadFromFeedback(uint64_t vaddr, uint64_t size, bool i
+@@ -1288,14 +3346,16 @@ bool BufferCache::TryGuestReadFromFeedback(uint64_t vaddr, uint64_t size, bool i
  			last  = std::max(last, slot.address + slot.size);
  		}
  	}
@@ -8046,7 +8053,7 @@ index 68bf95d2fedca8a7c131f057bdbfe292fe137bb6..9003e9ffdc184fcb38ddb717cbe493ea
  	return true;
  }
  
-@@ -1304,6 +3366,7 @@ void BufferCache::ReleaseReadback(uint64_t vaddr, uint64_t size, uint64_t pages_
+@@ -1304,6 +3364,7 @@ void BufferCache::ReleaseReadback(uint64_t vaddr, uint64_t size, uint64_t pages_
  	std::erase_if(m_inflight_readbacks,
  	              [tick](const InFlightReadback& readback) { return readback.tick <= tick; });
  	if (InFlightReadbackTick(pages_begin, pages_end) != 0 ||
@@ -8054,7 +8061,7 @@ index 68bf95d2fedca8a7c131f057bdbfe292fe137bb6..9003e9ffdc184fcb38ddb717cbe493ea
  	    m_gpu_modified_ranges.Intersects(pages_begin, pages_end - pages_begin)) {
  		return;
  	}
-@@ -1314,11 +3377,10 @@ void BufferCache::ReleaseReadback(uint64_t vaddr, uint64_t size, uint64_t pages_
+@@ -1314,11 +3375,10 @@ void BufferCache::ReleaseReadback(uint64_t vaddr, uint64_t size, uint64_t pages_
  }
  
  uint64_t BufferCache::ReadAheadSize(const Buffer& buffer, uint64_t vaddr, uint64_t size) const {
@@ -8070,7 +8077,7 @@ index 68bf95d2fedca8a7c131f057bdbfe292fe137bb6..9003e9ffdc184fcb38ddb717cbe493ea
  	const auto latest_write = [&](uint64_t begin, uint64_t end) {
  		uint64_t latest = 0;
  		m_gpu_modified_ranges.ForEachInRange(begin, end - begin, [&](uint64_t first, uint64_t last) {
-@@ -1336,7 +3398,15 @@ uint64_t BufferCache::ReadAheadSize(const Buffer& buffer, uint64_t vaddr, uint64
+@@ -1336,7 +3396,15 @@ uint64_t BufferCache::ReadAheadSize(const Buffer& buffer, uint64_t vaddr, uint64
  		return size;
  	}
  	const auto current = m_scheduler.CurrentTick();
@@ -8087,7 +8094,7 @@ index 68bf95d2fedca8a7c131f057bdbfe292fe137bb6..9003e9ffdc184fcb38ddb717cbe493ea
  	auto end    = faulting_end;
  	auto cursor = faulting_end;
  	while (cursor + TRACKER_PAGE_SIZE <= limit &&
-@@ -1346,7 +3416,7 @@ uint64_t BufferCache::ReadAheadSize(const Buffer& buffer, uint64_t vaddr, uint64
+@@ -1346,7 +3414,7 @@ uint64_t BufferCache::ReadAheadSize(const Buffer& buffer, uint64_t vaddr, uint64
  			continue;
  		}
  		const auto tick = latest_write(cursor, cursor + TRACKER_PAGE_SIZE);
@@ -8096,7 +8103,7 @@ index 68bf95d2fedca8a7c131f057bdbfe292fe137bb6..9003e9ffdc184fcb38ddb717cbe493ea
  			break;
  		}
  		cursor += TRACKER_PAGE_SIZE;
-@@ -1482,12 +3552,31 @@ bool BufferCache::NoImageStartsAt(uint64_t vaddr) const noexcept {
+@@ -1482,12 +3550,31 @@ bool BufferCache::NoImageStartsAt(uint64_t vaddr) const noexcept {
  
  bool BufferCache::SynchronizeBuffer(Buffer& buffer, uint64_t vaddr, uint64_t size, bool is_written,
                                      bool is_texel_buffer) {
@@ -8128,7 +8135,7 @@ index 68bf95d2fedca8a7c131f057bdbfe292fe137bb6..9003e9ffdc184fcb38ddb717cbe493ea
  	Common::SmallVector<vk::BufferCopy, 8> copies;
  	uint64_t                    total_size = 0;
  	vk::Buffer                  source;
-@@ -1500,6 +3589,7 @@ bool BufferCache::SynchronizeBuffer(Buffer& buffer, uint64_t vaddr, uint64_t siz
+@@ -1500,6 +3587,7 @@ bool BufferCache::SynchronizeBuffer(Buffer& buffer, uint64_t vaddr, uint64_t siz
  		    NoteUpload(address, bytes);
  	    },
  	    [&]() noexcept { source = UploadCopies(buffer, {copies.data(),copies.size()}, total_size); }, m_device_sync_pass);
@@ -8136,7 +8143,7 @@ index 68bf95d2fedca8a7c131f057bdbfe292fe137bb6..9003e9ffdc184fcb38ddb717cbe493ea
  	RecordBufferUpload(buffer, {copies.data(),copies.size()}, source);
      static thread_local uint64_t observed = 0, small = 0, spill = 0, empty = 0;
      if (copies.empty()) ++empty;
-@@ -1517,6 +3607,9 @@ bool BufferCache::SynchronizeBuffer(Buffer& buffer, uint64_t vaddr, uint64_t siz
+@@ -1517,6 +3605,9 @@ bool BufferCache::SynchronizeBuffer(Buffer& buffer, uint64_t vaddr, uint64_t siz
  
  void BufferCache::RecordBufferUpload(Buffer& buffer, std::span<const vk::BufferCopy> copies,
                                       vk::Buffer source) {
@@ -8146,7 +8153,7 @@ index 68bf95d2fedca8a7c131f057bdbfe292fe137bb6..9003e9ffdc184fcb38ddb717cbe493ea
  	if (source && m_upload_batching && source == m_staging_buffer.Handle()) {
  		m_upload_batch_buffers.push_back(
  		    {buffer.Handle(), buffer.BufferDeviceAddress(), static_cast<uint32_t>(copies.size())});
-@@ -1525,6 +3618,7 @@ void BufferCache::RecordBufferUpload(Buffer& buffer, std::span<const vk::BufferC
+@@ -1525,6 +3616,7 @@ void BufferCache::RecordBufferUpload(Buffer& buffer, std::span<const vk::BufferC
  		auto& command = m_scheduler.Current();
  		command.EndRendering();
  		const auto native = command.Handle();
@@ -8154,7 +8161,7 @@ index 68bf95d2fedca8a7c131f057bdbfe292fe137bb6..9003e9ffdc184fcb38ddb717cbe493ea
  		vk::BufferMemoryBarrier before {};
  		before.srcAccessMask = vk::AccessFlagBits::eMemoryRead | vk::AccessFlagBits::eMemoryWrite |
  		                       vk::AccessFlagBits::eTransferRead |
-@@ -1551,6 +3645,24 @@ void BufferCache::RecordBufferUpload(Buffer& buffer, std::span<const vk::BufferC
+@@ -1551,6 +3643,24 @@ void BufferCache::RecordBufferUpload(Buffer& buffer, std::span<const vk::BufferC
  
  void BufferCache::SynchronizeBuffers(std::span<Buffer* const>                       buffers,
                                       std::span<const std::pair<uint64_t, uint64_t>> ranges) {
@@ -8179,7 +8186,7 @@ index 68bf95d2fedca8a7c131f057bdbfe292fe137bb6..9003e9ffdc184fcb38ddb717cbe493ea
  	if (m_span_copies.size() < buffers.size()) {
  		m_span_copies.resize(buffers.size());
  	}
-@@ -1577,12 +3689,73 @@ void BufferCache::SynchronizeBuffers(std::span<Buffer* const>
+@@ -1577,12 +3687,73 @@ void BufferCache::SynchronizeBuffers(std::span<Buffer* const>
  	    m_device_sync_pass);
  }
  
@@ -8255,7 +8262,7 @@ index 68bf95d2fedca8a7c131f057bdbfe292fe137bb6..9003e9ffdc184fcb38ddb717cbe493ea
  	thread_local std::vector<std::pair<const uint8_t*, uint64_t>> pieces;
  	if (!LibKernel::Memory::TryGetBackingPieces(address, size, pieces)) return false;
  
-@@ -1599,6 +3772,10 @@ static bool QueueBackedUploadPieces(HostCopyQueue& queue, uint8_t* destination,
+@@ -1599,6 +3770,10 @@ static bool QueueBackedUploadPieces(HostCopyQueue& queue, uint8_t* destination,
  	return true;
  }
  
@@ -8266,7 +8273,7 @@ index 68bf95d2fedca8a7c131f057bdbfe292fe137bb6..9003e9ffdc184fcb38ddb717cbe493ea
  vk::Buffer BufferCache::UploadCopies(Buffer& buffer, std::span<vk::BufferCopy> copies,
                                       uint64_t total_size) {
  	if (copies.empty()) {
-@@ -1606,6 +3783,12 @@ vk::Buffer BufferCache::UploadCopies(Buffer& buffer, std::span<vk::BufferCopy> c
+@@ -1606,6 +3781,12 @@ vk::Buffer BufferCache::UploadCopies(Buffer& buffer, std::span<vk::BufferCopy> c
  	}
  	Common::DebugCounters::Add(Common::DebugCounters::Counter::BufferUploadBytes, total_size);
  	g_write_block_stats.uploaded.fetch_add(total_size, std::memory_order_relaxed);
@@ -8279,7 +8286,7 @@ index 68bf95d2fedca8a7c131f057bdbfe292fe137bb6..9003e9ffdc184fcb38ddb717cbe493ea
  
  	auto*      host_copies = m_scheduler.HostCopies();
  	auto* protections = ProtectionLane::find(host_copies);
-@@ -1616,20 +3799,63 @@ vk::Buffer BufferCache::UploadCopies(Buffer& buffer, std::span<vk::BufferCopy> c
+@@ -1616,20 +3797,63 @@ vk::Buffer BufferCache::UploadCopies(Buffer& buffer, std::span<vk::BufferCopy> c
  	    vk::BufferUsageFlagBits::eTransferSrc, [&](uint8_t* mapped, uint64_t base_offset) {
  		const bool in_ring =
  		    hand_over && mapped >= ring.data() && mapped < ring.data() + ring.size();
@@ -8351,7 +8358,7 @@ index 68bf95d2fedca8a7c131f057bdbfe292fe137bb6..9003e9ffdc184fcb38ddb717cbe493ea
  				} else {
  					item.manager->ApplyDeferredProtection(item.address, item.size);
  				}
-@@ -1638,19 +3864,47 @@ vk::Buffer BufferCache::UploadCopies(Buffer& buffer, std::span<vk::BufferCopy> c
+@@ -1638,19 +3862,47 @@ vk::Buffer BufferCache::UploadCopies(Buffer& buffer, std::span<vk::BufferCopy> c
  			if (queued) {
                  m_protect_jobs = protections ? ProtectionLane::publish(*host_copies,*protections) : host_copies->Flush();
                  static thread_local bool reported=false;
@@ -8405,7 +8412,7 @@ index 68bf95d2fedca8a7c131f057bdbfe292fe137bb6..9003e9ffdc184fcb38ddb717cbe493ea
  				}
  				if (!LibKernel::Memory::CopySparseMemory(address, mapped + copy.srcOffset, copy.size)) {
  					EXIT("BufferCache: failed to read sparse guest buffer memory\n");
-@@ -1667,12 +3921,18 @@ void BufferCache::StreamGuestData(uint8_t* destination, uint64_t vaddr, uint64_t
+@@ -1667,12 +3919,18 @@ void BufferCache::StreamGuestData(uint8_t* destination, uint64_t vaddr, uint64_t
  	if (copies != nullptr && m_stream_buffer.IsCoherent() && GuestGpu::IsGpuThread()) {
  		if (const void* source = Libs::LibKernel::Memory::FindBackingPointer(vaddr, size)) {
  			if (m_stream_in_place) {
@@ -8424,7 +8431,7 @@ index 68bf95d2fedca8a7c131f057bdbfe292fe137bb6..9003e9ffdc184fcb38ddb717cbe493ea
  	}
  	if (!LibKernel::Memory::TryReadBacking(vaddr, destination, size) &&
  	    !LibKernel::Memory::CopySparseMemory(vaddr, destination, size)) {
-@@ -1699,11 +3959,18 @@ std::optional<uint64_t> BufferCache::StreamGuestRange(uint64_t vaddr, uint64_t s
+@@ -1699,11 +3957,18 @@ std::optional<uint64_t> BufferCache::StreamGuestRange(uint64_t vaddr, uint64_t s
  	auto* copies = m_scheduler.HostCopies();
  	if (copies != nullptr && m_stream_buffer.IsCoherent() && GuestGpu::IsGpuThread()) {
  		if (m_stream_in_place) {
@@ -8443,7 +8450,7 @@ index 68bf95d2fedca8a7c131f057bdbfe292fe137bb6..9003e9ffdc184fcb38ddb717cbe493ea
  		std::memcpy(mapped, source, bytes);
  	}
  	m_stream_buffer.Commit();
-@@ -1764,7 +4031,18 @@ std::pair<Buffer*, uint64_t> BufferCache::ObtainBuffer(uint64_t vaddr, uint64_t
+@@ -1764,7 +4029,18 @@ std::pair<Buffer*, uint64_t> BufferCache::ObtainBuffer(uint64_t vaddr, uint64_t
                                                         BufferId id) {
  	EXIT_IF(!(GuestRange {vaddr, size}.Valid()));
  	if (is_written) {
@@ -8462,7 +8469,7 @@ index 68bf95d2fedca8a7c131f057bdbfe292fe137bb6..9003e9ffdc184fcb38ddb717cbe493ea
  	}
  
  	const bool  small_read = !is_written && size <= CACHING_PAGESIZE;
-@@ -1836,32 +4114,68 @@ std::pair<Buffer*, uint64_t> BufferCache::ObtainBuffer(uint64_t vaddr, uint64_t
+@@ -1836,32 +4112,68 @@ std::pair<Buffer*, uint64_t> BufferCache::ObtainBuffer(uint64_t vaddr, uint64_t
  	if (IsBufferInvalid(id) || !m_slot_buffers[id].IsInBounds(vaddr, size)) {
  		id = FindBuffer(vaddr, size);
  	}
@@ -8551,7 +8558,7 @@ index 68bf95d2fedca8a7c131f057bdbfe292fe137bb6..9003e9ffdc184fcb38ddb717cbe493ea
  	(void)SynchronizeBuffer(buffer, vaddr, size, is_written, is_texel_buffer);
  	if (written != nullptr) {
  		*written = {.vaddr        = vaddr,
-@@ -1897,11 +4211,16 @@ std::pair<Buffer*, uint64_t> BufferCache::ObtainBuffer(uint64_t vaddr, uint64_t
+@@ -1897,11 +4209,16 @@ std::pair<Buffer*, uint64_t> BufferCache::ObtainBuffer(uint64_t vaddr, uint64_t
  	}
  	if (is_written) {
  		m_gpu_write_generation++;
@@ -8568,7 +8575,7 @@ index 68bf95d2fedca8a7c131f057bdbfe292fe137bb6..9003e9ffdc184fcb38ddb717cbe493ea
  	}
  	return {&buffer, buffer.Offset(vaddr)};
  }
-@@ -1990,7 +4309,107 @@ void BufferCache::DrainHostCopies() {
+@@ -1990,7 +4307,107 @@ void BufferCache::DrainHostCopies() {
  	}
  }
  
@@ -8676,7 +8683,7 @@ index 68bf95d2fedca8a7c131f057bdbfe292fe137bb6..9003e9ffdc184fcb38ddb717cbe493ea
  	m_gpu_write_generation++;
  	if ((vaddr & 3u) != 0 || size == 0 || (size & 3u) != 0 || size > UINT64_MAX - vaddr) {
  		EXIT("BufferCache: fill range must be dword aligned\n");
-@@ -2006,17 +4425,32 @@ void BufferCache::FillBuffer(uint64_t vaddr, uint64_t size, uint32_t value, bool
+@@ -2006,17 +4423,32 @@ void BufferCache::FillBuffer(uint64_t vaddr, uint64_t size, uint32_t value, bool
  		EXIT("BufferCache: invalid fill memory address\n");
  	}
  	(void)m_texture_cache.ClearMeta(vaddr);
@@ -8712,7 +8719,7 @@ index 68bf95d2fedca8a7c131f057bdbfe292fe137bb6..9003e9ffdc184fcb38ddb717cbe493ea
  	auto [dst, dst_offset] = ObtainBuffer(vaddr, size, true, true);
  	dst->Fill(dst_offset, size, value);
  }
-@@ -2028,14 +4462,21 @@ bool BufferCache::ReplicateBuffer(uint64_t destination, uint64_t count, uint64_t
+@@ -2028,14 +4460,21 @@ bool BufferCache::ReplicateBuffer(uint64_t destination, uint64_t count, uint64_t
  	if (destination == 0 || source == 0 || ((destination | source) & 3u) != 0 || count == 0 ||
  	    pattern == 0 || (destination < source + from && source < destination + size) ||
  	    IsRegionGpuModified(destination, size) || IsRegionGpuModified(source, from) ||
@@ -8736,7 +8743,7 @@ index 68bf95d2fedca8a7c131f057bdbfe292fe137bb6..9003e9ffdc184fcb38ddb717cbe493ea
  	auto*      target = reinterpret_cast<uint8_t*>(destination);
  	const auto first  = std::min(size, from);
  	std::memcpy(target, reinterpret_cast<const void*>(source), first);
-@@ -2050,6 +4491,8 @@ bool BufferCache::ReplicateBuffer(uint64_t destination, uint64_t count, uint64_t
+@@ -2050,6 +4489,8 @@ bool BufferCache::ReplicateBuffer(uint64_t destination, uint64_t count, uint64_t
  
  void BufferCache::CopyBuffer(uint64_t dst_vaddr, uint64_t src_vaddr, uint64_t size, bool dst_gds,
                               bool src_gds) {
@@ -8745,7 +8752,7 @@ index 68bf95d2fedca8a7c131f057bdbfe292fe137bb6..9003e9ffdc184fcb38ddb717cbe493ea
  	m_gpu_write_generation++;
  	const bool dst_memory = !dst_gds;
  	const bool src_memory = !src_gds;
-@@ -2067,8 +4510,15 @@ void BufferCache::CopyBuffer(uint64_t dst_vaddr, uint64_t src_vaddr, uint64_t si
+@@ -2067,8 +4508,15 @@ void BufferCache::CopyBuffer(uint64_t dst_vaddr, uint64_t src_vaddr, uint64_t si
  		return;
  	}
  	if (src_memory && dst_memory && !IsRegionGpuModified(dst_vaddr, size) &&
@@ -8763,7 +8770,7 @@ index 68bf95d2fedca8a7c131f057bdbfe292fe137bb6..9003e9ffdc184fcb38ddb717cbe493ea
  		std::memcpy(reinterpret_cast<void*>(dst_vaddr), reinterpret_cast<const void*>(src_vaddr),
  		            size);
  		LibKernel::Memory::NoteEmulatorWrite(dst_vaddr, size);
-@@ -2077,14 +4527,39 @@ void BufferCache::CopyBuffer(uint64_t dst_vaddr, uint64_t src_vaddr, uint64_t si
+@@ -2077,14 +4525,39 @@ void BufferCache::CopyBuffer(uint64_t dst_vaddr, uint64_t src_vaddr, uint64_t si
  
  	auto& command = m_scheduler.Current();
  	if (dst_memory) {
@@ -8805,7 +8812,7 @@ index 68bf95d2fedca8a7c131f057bdbfe292fe137bb6..9003e9ffdc184fcb38ddb717cbe493ea
  	dst->CopyFrom(command, *src, src_offset, dst_offset, size);
  }
  
-@@ -2092,34 +4567,66 @@ void BufferCache::WriteTicks::Assign(uint64_t begin, uint64_t end, uint64_t tick
+@@ -2092,34 +4565,66 @@ void BufferCache::WriteTicks::Assign(uint64_t begin, uint64_t end, uint64_t tick
  	if (begin >= end) {
  		return;
  	}
@@ -8882,7 +8889,7 @@ index 68bf95d2fedca8a7c131f057bdbfe292fe137bb6..9003e9ffdc184fcb38ddb717cbe493ea
  }
  
  uint64_t BufferCache::WriteTicks::Latest(uint64_t begin, uint64_t end) const {
-@@ -2190,6 +4697,7 @@ bool BufferCache::TakeFlushRequest() {
+@@ -2190,6 +4695,7 @@ bool BufferCache::TakeFlushRequest() {
  }
  
  bool BufferCache::CommitWriteTicks() {
@@ -8890,7 +8897,7 @@ index 68bf95d2fedca8a7c131f057bdbfe292fe137bb6..9003e9ffdc184fcb38ddb717cbe493ea
  	if (m_pending_writes.empty() && !m_device_address_pending) {
  		return TakeFlushRequest();
  	}
-@@ -2212,6 +4720,9 @@ bool BufferCache::CommitWriteTicks() {
+@@ -2212,6 +4718,9 @@ bool BufferCache::CommitWriteTicks() {
  
  void BufferCache::MarkMirrorLinesWritten(uint64_t vaddr, uint64_t size, uint64_t tick) {
  	const auto end = size > UINT64_MAX - vaddr ? UINT64_MAX : vaddr + size;
@@ -8900,7 +8907,7 @@ index 68bf95d2fedca8a7c131f057bdbfe292fe137bb6..9003e9ffdc184fcb38ddb717cbe493ea
  	for (auto it = m_mirror_lines.lower_bound(Common::AlignDown(vaddr, MirrorLineSize));
  	     it != m_mirror_lines.end() && it->first < end; ++it) {
  		auto& line = it->second;
-@@ -2246,6 +4757,8 @@ void BufferCache::AddMirrorLine(uint64_t line) {
+@@ -2246,6 +4755,8 @@ void BufferCache::AddMirrorLine(uint64_t line) {
  					++it;
  				}
  			}
@@ -8909,7 +8916,7 @@ index 68bf95d2fedca8a7c131f057bdbfe292fe137bb6..9003e9ffdc184fcb38ddb717cbe493ea
  		}
  	}
  	MirrorLine entry;
-@@ -2254,15 +4767,24 @@ void BufferCache::AddMirrorLine(uint64_t line) {
+@@ -2254,15 +4765,24 @@ void BufferCache::AddMirrorLine(uint64_t line) {
  	entry.last_use = ++m_mirror_uses;
  	entry.dirty_tick = m_scheduler.CurrentTick();
  	m_mirror_lines.emplace(line, entry);
@@ -8935,7 +8942,7 @@ index 68bf95d2fedca8a7c131f057bdbfe292fe137bb6..9003e9ffdc184fcb38ddb717cbe493ea
  		return false;
  	}
  	for (const auto& [address, bytes]: m_pending_writes) {
-@@ -2307,12 +4829,21 @@ bool BufferCache::TryReadMirroredGpuWrites(uint64_t vaddr, void* data, uint64_t
+@@ -2307,12 +4827,21 @@ bool BufferCache::TryReadMirroredGpuWrites(uint64_t vaddr, void* data, uint64_t
  	if (!held || wait >= m_scheduler.CurrentTick()) {
  		return false;
  	}
@@ -8957,7 +8964,7 @@ index 68bf95d2fedca8a7c131f057bdbfe292fe137bb6..9003e9ffdc184fcb38ddb717cbe493ea
  	const auto* mapped = m_mirror->Mapped().data();
  	m_gpu_modified_ranges.ForEachInRange(vaddr, size, [&](uint64_t start, uint64_t end) {
  		while (start < end) {
-@@ -2418,6 +4949,7 @@ bool BufferCache::DownloadOnReadbackQueue(Buffer& buffer, std::span<const vk::Bu
+@@ -2418,6 +4947,7 @@ bool BufferCache::DownloadOnReadbackQueue(Buffer& buffer, std::span<const vk::Bu
  		return false;
  	}
  	NoteReadbackWait(readback_begin, readback_end, device_address, false);
@@ -8965,7 +8972,7 @@ index 68bf95d2fedca8a7c131f057bdbfe292fe137bb6..9003e9ffdc184fcb38ddb717cbe493ea
  	while (m_scheduler.SubmittedTick() < needed) {
  		Common::SpinPause();
  	}
-@@ -2475,8 +5007,11 @@ bool BufferCache::DownloadOnReadbackQueue(Buffer& buffer, std::span<const vk::Bu
+@@ -2475,8 +5005,11 @@ bool BufferCache::DownloadOnReadbackQueue(Buffer& buffer, std::span<const vk::Bu
  	submit.pWaitDstStageMask  = &wait_stage;
  	submit.commandBufferCount = 1;
  	submit.pCommandBuffers    = &command;
@@ -8979,7 +8986,7 @@ index 68bf95d2fedca8a7c131f057bdbfe292fe137bb6..9003e9ffdc184fcb38ddb717cbe493ea
  	}
  	for (;;) {
  		const auto status = device.getFenceStatus(m_readback.fence);
-@@ -2490,6 +5025,11 @@ bool BufferCache::DownloadOnReadbackQueue(Buffer& buffer, std::span<const vk::Bu
+@@ -2490,6 +5023,11 @@ bool BufferCache::DownloadOnReadbackQueue(Buffer& buffer, std::span<const vk::Bu
  	}
  	(void)device.resetFences(1, &m_readback.fence);
  	m_scheduler.WaitPriorityOperations(needed);
@@ -8991,7 +8998,7 @@ index 68bf95d2fedca8a7c131f057bdbfe292fe137bb6..9003e9ffdc184fcb38ddb717cbe493ea
  	staging.Invalidate(0, total_size);
  	const auto* mapped = staging.Mapped().data();
  	for (const auto& copy: copies) {
-@@ -2542,7 +5082,8 @@ bool BufferCache::IsRegionGpuModified(uint64_t vaddr, uint64_t size) {
+@@ -2542,7 +5080,8 @@ bool BufferCache::IsRegionGpuModified(uint64_t vaddr, uint64_t size) {
  bool BufferCache::WriteAroundGpuWrites(uint64_t vaddr, const void* data, uint64_t size) {
  	constexpr uint64_t MaxBytes = 4096;
  	if (size == 0 || size > MaxBytes || (vaddr & 3u) != 0 || (size & 3u) != 0 ||
@@ -9001,7 +9008,7 @@ index 68bf95d2fedca8a7c131f057bdbfe292fe137bb6..9003e9ffdc184fcb38ddb717cbe493ea
  		return false;
  	}
  	Buffer*    buffer = nullptr;
-@@ -2578,6 +5119,9 @@ bool BufferCache::WriteAroundGpuWrites(uint64_t vaddr, const void* data, uint64_
+@@ -2578,6 +5117,9 @@ bool BufferCache::WriteAroundGpuWrites(uint64_t vaddr, const void* data, uint64_
  	                       vk::PipelineStageFlagBits::eTransfer, vk::DependencyFlagBits::eByRegion,
  	                       0, nullptr, 1, &before, 0, nullptr);
  	const vk::BufferCopy copy {offset, buffer->Offset(vaddr), size};
@@ -9011,7 +9018,7 @@ index 68bf95d2fedca8a7c131f057bdbfe292fe137bb6..9003e9ffdc184fcb38ddb717cbe493ea
  	native.copyBuffer(stream.Handle(), buffer->Handle(), 1, &copy);
  	NoteWrite(vaddr, size);
  	auto after          = before;
-@@ -2596,10 +5140,12 @@ bool BufferCache::WriteAroundGpuWrites(uint64_t vaddr, const void* data, uint64_
+@@ -2596,10 +5138,12 @@ bool BufferCache::WriteAroundGpuWrites(uint64_t vaddr, const void* data, uint64_
  }
  
  bool BufferCache::HasGpuDirtyBytes(uint64_t vaddr, uint64_t size) {
@@ -9026,7 +9033,7 @@ index 68bf95d2fedca8a7c131f057bdbfe292fe137bb6..9003e9ffdc184fcb38ddb717cbe493ea
  		return true;
  	}
  	if (size == 0 || (vaddr + size - 1) / PageSize != page) {
-@@ -2687,7 +5233,8 @@ void BufferCache::NoteGpuLines(uint64_t vaddr, uint64_t size) noexcept {
+@@ -2687,7 +5231,8 @@ void BufferCache::NoteGpuLines(uint64_t vaddr, uint64_t size) noexcept {
  	const bool memo = last - first >= GpuLineMemoPages;
  	if (memo) {
  		for (const auto& range: m_gpu_line_memo) {
@@ -9036,7 +9043,7 @@ index 68bf95d2fedca8a7c131f057bdbfe292fe137bb6..9003e9ffdc184fcb38ddb717cbe493ea
  				return;
  			}
  		}
-@@ -2883,6 +5430,7 @@ void BufferCache::NoteGpuModifiedChange(uint64_t vaddr, uint64_t size, bool dirt
+@@ -2883,6 +5428,7 @@ void BufferCache::NoteGpuModifiedChange(uint64_t vaddr, uint64_t size, bool dirt
  }
  
  bool BufferCache::HasOnlyGpuDirtyBytes(uint64_t vaddr, uint64_t size) {
@@ -9044,7 +9051,7 @@ index 68bf95d2fedca8a7c131f057bdbfe292fe137bb6..9003e9ffdc184fcb38ddb717cbe493ea
  	return m_gpu_modified_ranges.Contains(vaddr, size);
  }
  
-@@ -2904,7 +5452,8 @@ void BufferCache::CollectStaleBuffers(uint64_t tick) {
+@@ -2904,7 +5450,8 @@ void BufferCache::CollectStaleBuffers(uint64_t tick) {
  		const auto& buffer = m_slot_buffers[id];
  		const bool  keep   = buffer.device_address_pinned ||
  		                  m_gpu_modified_ranges.Intersects(buffer.CpuAddress(), buffer.Size()) ||
@@ -9054,7 +9061,7 @@ index 68bf95d2fedca8a7c131f057bdbfe292fe137bb6..9003e9ffdc184fcb38ddb717cbe493ea
  		(keep ? kept : stale).push_back(id);
  		return stale.size() == StaleFreeMax || stale.size() + kept.size() == StaleVisitMax;
  	});
-@@ -3006,122 +5555,704 @@ uint64_t BufferCache::SplitUnmappedBuffers(uint64_t vaddr, uint64_t size, FreeBl
+@@ -3006,122 +5553,704 @@ uint64_t BufferCache::SplitUnmappedBuffers(uint64_t vaddr, uint64_t size, FreeBl
  				const auto from = std::max(begin, address), to = std::min(stop, address + bytes);
  				if (from < to) over.emplace_back(from, to - from);
  			}
@@ -9851,7 +9858,7 @@ index 68bf95d2fedca8a7c131f057bdbfe292fe137bb6..9003e9ffdc184fcb38ddb717cbe493ea
  	const auto tick = m_gc_tick++;
  	CollectStaleBuffers(tick);
  	if (m_graphics.CanReportMemoryUsage()) {
-@@ -3139,6 +6270,9 @@ void BufferCache::RunGarbageCollector() {
+@@ -3139,6 +6268,9 @@ void BufferCache::RunGarbageCollector() {
  	size_t                retire_count = 0;
  	m_lru_cache.ForEachItemBelow(tick - age, [&](BufferId id) {
  		auto& buffer = m_slot_buffers[id];
@@ -9861,7 +9868,7 @@ index 68bf95d2fedca8a7c131f057bdbfe292fe137bb6..9003e9ffdc184fcb38ddb717cbe493ea
  		m_memory_tracker.ValidateGpuDirtyOwnership(m_gpu_modified_ranges, buffer.CpuAddress(),
  		                                           buffer.Size(), "garbage collection");
  		const bool dirty = m_memory_tracker.IsRegionGpuModified(buffer.CpuAddress(), buffer.Size());
-@@ -3184,6 +6318,13 @@ void BufferCache::ProcessFaultBuffer() {
+@@ -3184,6 +6316,13 @@ void BufferCache::ProcessFaultBuffer() {
  }
  
  void BufferCache::ProcessUseBuffer() {
@@ -9875,7 +9882,7 @@ index 68bf95d2fedca8a7c131f057bdbfe292fe137bb6..9003e9ffdc184fcb38ddb717cbe493ea
  	m_fault_manager.ProcessUseBuffer([this](std::span<const uint64_t> pages) {
  		for (const auto page: pages) {
  			const auto* owner = m_page_table.Find(page >> PageTable::kPageBits);
-@@ -3205,6 +6346,7 @@ void BufferCache::NoteGpuWrites(uint64_t vaddr, uint64_t size) {
+@@ -3205,6 +6344,7 @@ void BufferCache::NoteGpuWrites(uint64_t vaddr, uint64_t size) {
  	if (it != m_buffers.begin()) {
  		--it;
  	}
@@ -9883,7 +9890,7 @@ index 68bf95d2fedca8a7c131f057bdbfe292fe137bb6..9003e9ffdc184fcb38ddb717cbe493ea
  	for (; it != m_buffers.end() && it->first < end; ++it) {
  		const auto& buffer = m_slot_buffers[it->second];
  		const auto  start  = std::max(buffer.CpuAddress(), vaddr);
-@@ -3212,8 +6354,18 @@ void BufferCache::NoteGpuWrites(uint64_t vaddr, uint64_t size) {
+@@ -3212,8 +6352,18 @@ void BufferCache::NoteGpuWrites(uint64_t vaddr, uint64_t size) {
  		if (start >= finish) {
  			continue;
  		}
@@ -9902,7 +9909,7 @@ index 68bf95d2fedca8a7c131f057bdbfe292fe137bb6..9003e9ffdc184fcb38ddb717cbe493ea
  		m_memory_tracker.MarkRegionAsGpuModifiedUnlessCpuDirty(
  		    start, finish - start, [&](uint64_t page, uint64_t bytes) {
  			    const auto first = std::max(page, start);
-@@ -3223,6 +6375,17 @@ void BufferCache::NoteGpuWrites(uint64_t vaddr, uint64_t size) {
+@@ -3223,6 +6373,17 @@ void BufferCache::NoteGpuWrites(uint64_t vaddr, uint64_t size) {
  			    }
  		    });
  	}
@@ -9920,7 +9927,7 @@ index 68bf95d2fedca8a7c131f057bdbfe292fe137bb6..9003e9ffdc184fcb38ddb717cbe493ea
  }
  
  void BufferCache::FlushUploadBatch() {
-@@ -3247,14 +6410,19 @@ void BufferCache::FlushUploadBatch() {
+@@ -3247,14 +6408,19 @@ void BufferCache::FlushUploadBatch() {
                           static_cast<unsigned>(useTransfer), static_cast<unsigned long long>(batches),
                           static_cast<unsigned long long>(potentialDestinations), static_cast<unsigned long long>(potentialRegions));
      }
@@ -9946,7 +9953,7 @@ index 68bf95d2fedca8a7c131f057bdbfe292fe137bb6..9003e9ffdc184fcb38ddb717cbe493ea
  	before.dstAccessMask = vk::AccessFlagBits::eTransferWrite;
  	native.pipelineBarrier(vk::PipelineStageFlagBits::eAllCommands,
  	                       vk::PipelineStageFlagBits::eTransfer, vk::DependencyFlagBits::eByRegion, 1,
-@@ -3347,7 +6515,7 @@ bool BufferCache::ScatterUploadBatch(const CommandRecorder& native) {
+@@ -3347,7 +6513,7 @@ bool BufferCache::ScatterUploadBatch(const CommandRecorder& native) {
  		SetVulkanObjectNameF(device, m_scatter_pipeline, "Kyty.BufferScatter");
  	}
  	vk::MemoryBarrier before {};
@@ -9955,7 +9962,7 @@ index 68bf95d2fedca8a7c131f057bdbfe292fe137bb6..9003e9ffdc184fcb38ddb717cbe493ea
  	before.dstAccessMask = vk::AccessFlagBits::eShaderRead | vk::AccessFlagBits::eShaderWrite;
  	native.pipelineBarrier(vk::PipelineStageFlagBits::eAllCommands,
  	                       vk::PipelineStageFlagBits::eComputeShader, vk::DependencyFlagBits::eByRegion, 1,
-@@ -3369,6 +6537,154 @@ bool BufferCache::ScatterUploadBatch(const CommandRecorder& native) {
+@@ -3369,6 +6535,154 @@ bool BufferCache::ScatterUploadBatch(const CommandRecorder& native) {
  	return true;
  }
  
@@ -10110,7 +10117,7 @@ index 68bf95d2fedca8a7c131f057bdbfe292fe137bb6..9003e9ffdc184fcb38ddb717cbe493ea
  struct BufferCache::UploadBatch {
  	BufferCache& cache;
  	explicit UploadBatch(BufferCache& owner): cache(owner) {
-@@ -3605,6 +6921,7 @@ void BufferCache::SynchronizeBuffersInSet(const RangeSet& set, SetRegions& state
+@@ -3605,6 +6919,7 @@ void BufferCache::SynchronizeBuffersInSet(const RangeSet& set, SetRegions& state
  	state.pass = sync;
  }
  
@@ -10118,7 +10125,7 @@ index 68bf95d2fedca8a7c131f057bdbfe292fe137bb6..9003e9ffdc184fcb38ddb717cbe493ea
  void BufferCache::SynchronizeBuffersInRanges(const RangeSet& ranges, bool all) {
  	const UploadBatch batch {*this};
  	if (const auto* stale = std::exchange(BdaSubmissionSync::stale_only, nullptr); stale != nullptr) {
-@@ -3646,19 +6963,368 @@ void BufferCache::SynchronizeBuffersInRanges(const RangeSet& ranges, bool all) {
+@@ -3646,19 +6961,368 @@ void BufferCache::SynchronizeBuffersInRanges(const RangeSet& ranges, bool all) {
  			m_sync_regions.emplace_back(index, epoch);
  		}
  	}
@@ -10494,7 +10501,7 @@ index 68bf95d2fedca8a7c131f057bdbfe292fe137bb6..9003e9ffdc184fcb38ddb717cbe493ea
  		m_span_buffers.clear();
  		m_span_ranges.clear();
  		static const bool indexed=[] {
-@@ -3696,6 +7362,23 @@ void BufferCache::SynchronizeBuffersInRange(uint64_t vaddr, uint64_t size) {
+@@ -3696,6 +7360,23 @@ void BufferCache::SynchronizeBuffersInRange(uint64_t vaddr, uint64_t size) {
          } else {
              CollectSpanBuffers(span,bytes,m_span_buffers,m_span_ranges);
          }
@@ -10518,7 +10525,7 @@ index 68bf95d2fedca8a7c131f057bdbfe292fe137bb6..9003e9ffdc184fcb38ddb717cbe493ea
  		if (m_span_buffers.size() == 1) {
  			(void)SynchronizeBuffer(*m_span_buffers[0], m_span_ranges[0].first,
  			                        m_span_ranges[0].second, false, false);
-@@ -3746,3 +7429,4 @@ void BufferCache::CollectSpanBuffers(uint64_t span, uint64_t bytes, std::vector<
+@@ -3746,3 +7427,4 @@ void BufferCache::CollectSpanBuffers(uint64_t span, uint64_t bytes, std::vector<
  }
  
  // Saros-Recomp change notice: Saros-Recomp modified this file for its Windows renderer. Recorded source revisions: 2026-11-21, 2026-11-22. Public source revision: 2026-11-22.
@@ -11238,7 +11245,7 @@ index b19fabec43d0a72ef2e0c1f88d519d6d56e45680..76e64108e1fe4c8b05cdd2f6e623a359
 +
 +// Saros-Recomp modified this file for the experimental Windows renderer on 2026-11-27.
 diff --git a/core/kyty/graphics/host_gpu/renderer/cache/textureCache.cpp b/core/kyty/graphics/host_gpu/renderer/cache/textureCache.cpp
-index 9d7d541ca630020df7145235a1669bdbf40c6627..07b7be4cfff461352f73fe2dd5383e5b2c1cf916 100644
+index 9d7d541ca630020df7145235a1669bdbf40c6627..f98bdff3a846ba7053937f7a212557f43a78b90d 100644
 --- a/core/kyty/graphics/host_gpu/renderer/cache/textureCache.cpp
 +++ b/core/kyty/graphics/host_gpu/renderer/cache/textureCache.cpp
 @@ -486,6 +486,9 @@ void TextureCache::RegisterImage(ImageId id) {
@@ -11303,7 +11310,7 @@ index 9d7d541ca630020df7145235a1669bdbf40c6627..07b7be4cfff461352f73fe2dd5383e5b
  	auto& image = m_slot_images[id];
  	TrackImage(id);
  	if (image.info.metadata.compression != VideoOutCompression::Uncompressed) {
-@@ -1698,11 +1703,148 @@ void TextureCache::InitializeImage(ImageId id) {
+@@ -1698,11 +1703,109 @@ void TextureCache::InitializeImage(ImageId id) {
  		image.RefreshComplete();
  		return;
  	}
@@ -11313,45 +11320,6 @@ index 9d7d541ca630020df7145235a1669bdbf40c6627..07b7be4cfff461352f73fe2dd5383e5b
 +		const char* value = std::getenv("KYTY_SKIP_TARGET_REFRESH");
 +		return value != nullptr && value[0] == '1';
 +	}();
-+	// KYTY_SMART_TARGET_REFRESH=1..4: skip detile+upload of large (>=1 MiB) transient images whose only
-+	// dirty mark came from GPU buffer aliasing (RDG transient memory reuse) at provably redundant sites:
-+	//   1 = StorageBuffer|TableXpr on target/DCC at MaterializeClear, ClearImage, ImageHeap
-+	//   2 = level 1 + RenderTarget / DepthTarget
-+	//   3 = level 2 + tiled StorageBuffer|TableXpr images at Storage / ImageHeap
-+	//   4 = level 3 + tiled InsertGpuDirty images at MaterializeClear / ClearImage / ImageHeap / RenderTarget / DepthTarget / Storage
-+	static const uint32_t smart_target_refresh = [] {
-+		const char* value = std::getenv("KYTY_SMART_TARGET_REFRESH");
-+		if (value == nullptr || value[0] < '0' || value[0] > '9') return 0u;
-+		return static_cast<uint32_t>(value[0] - '0');
-+	}();
-+	if (smart_target_refresh != 0u && upload && image.IsBufferModified() && !image.IsCpuDirty() &&
-+	    image.info.data.size >= 1024 * 1024) {
-+		const bool ssbo_src = image.buffer_mod_source == BufferModSource::StorageBuffer ||
-+		                      image.buffer_mod_source == BufferModSource::TableXpr;
-+		const bool ins_src  = smart_target_refresh >= 4u &&
-+		                      image.buffer_mod_source == BufferModSource::InsertGpuDirty;
-+		if (ssbo_src || ins_src) {
-+			const bool target_or_meta =
-+			    IsTargetImage(image) ||
-+			    (site == RefreshSite::MaterializeClear &&
-+			     (image.info.metadata.kind == ImageMetadataKind::Dcc ||
-+			      image.info.metadata.kind == ImageMetadataKind::Cmask));
-+			const bool target_site =
-+			    site == RefreshSite::MaterializeClear || site == RefreshSite::ClearImage ||
-+			    site == RefreshSite::ImageHeap ||
-+			    (smart_target_refresh >= 2u &&
-+			     (site == RefreshSite::RenderTarget || site == RefreshSite::DepthTarget));
-+			const bool tiled_transient_site =
-+			    smart_target_refresh >= 3u && image.info.IsTiled() &&
-+			    (site == RefreshSite::Storage || site == RefreshSite::ImageHeap ||
-+			     (ins_src && target_site));
-+			if ((ssbo_src && target_or_meta && target_site) || tiled_transient_site) {
-+				image.ClearBufferModified();
-+				image.RefreshComplete();
-+				return;
-+			}
-+		}
-+	}
 +	if (skip_target_refresh && upload && image.IsBufferModified() && !image.IsCpuDirty() && IsTargetImage(image) &&
 +	    image.info.data.size >= 1024 * 1024) {
 +		image.ClearBufferModified();
@@ -11452,7 +11420,7 @@ index 9d7d541ca630020df7145235a1669bdbf40c6627..07b7be4cfff461352f73fe2dd5383e5b
  		const auto [source, source_offset] =
  		    m_buffer_cache.ObtainBufferForImage(image.info.data.address, image.info.data.size);
  		if (source == nullptr) {
-@@ -1777,8 +1919,9 @@ void TextureCache::MaterializeColorClear(ImageId id, const ImageDesc& desc,
+@@ -1777,8 +1880,9 @@ void TextureCache::MaterializeColorClear(ImageId id, const ImageDesc& desc,
  		std::scoped_lock lock {m_lock};
  		auto& image         = m_slot_images[id];
  		image.info.metadata = desc.info.metadata;
@@ -11464,7 +11432,7 @@ index 9d7d541ca630020df7145235a1669bdbf40c6627..07b7be4cfff461352f73fe2dd5383e5b
  		if (range.size == 0 || view.level_count != 1) {
  			return;
  		}
-@@ -1843,7 +1986,7 @@ void TextureCache::MaterializeColorClear(ImageId id, const ImageDesc& desc,
+@@ -1843,7 +1947,7 @@ void TextureCache::MaterializeColorClear(ImageId id, const ImageDesc& desc,
  			    (desc.info.metadata.compression == VideoOutCompression::Uncompressed ||
  			     native_current)) {
  				Common::DebugCounters::Add(Common::DebugCounters::Counter::ColorMetadataChecks);
@@ -11473,7 +11441,7 @@ index 9d7d541ca630020df7145235a1669bdbf40c6627..07b7be4cfff461352f73fe2dd5383e5b
  				const bool expand = desc.type != BindingType::VideoOut;
  				const auto [buffer, offset] =
  				    m_buffer_cache.ObtainBuffer(viewed.address, viewed.size, expand);
-@@ -1903,11 +2046,37 @@ void TextureCache::MaterializeColorClear(ImageId id, const ImageDesc& desc,
+@@ -1903,11 +2007,37 @@ void TextureCache::MaterializeColorClear(ImageId id, const ImageDesc& desc,
  		if (!DecodeColorClear(desc, code, clear.color)) {
  			continue;
  		}
@@ -11515,7 +11483,7 @@ index 9d7d541ca630020df7145235a1669bdbf40c6627..07b7be4cfff461352f73fe2dd5383e5b
  			continue;
  		}
  		{
-@@ -1924,7 +2093,7 @@ void TextureCache::MaterializeColorClear(ImageId id, const ImageDesc& desc,
+@@ -1924,7 +2054,7 @@ void TextureCache::MaterializeColorClear(ImageId id, const ImageDesc& desc,
  			            image_first + slice, 1}, clear);
  		}
  		if (desc.type != BindingType::VideoOut && !desc.candidate) {
@@ -11524,7 +11492,7 @@ index 9d7d541ca630020df7145235a1669bdbf40c6627..07b7be4cfff461352f73fe2dd5383e5b
  			m_buffer_cache.InvalidateMemory(address, bytes.size());
  			LibKernel::Memory::WriteBacking(address, bytes.data(), bytes.size());
  		}
-@@ -1936,7 +2105,7 @@ void TextureCache::MaterializeColorClear(ImageId id, const ImageDesc& desc,
+@@ -1936,7 +2066,7 @@ void TextureCache::MaterializeColorClear(ImageId id, const ImageDesc& desc,
  	}
  }
  
@@ -11533,7 +11501,7 @@ index 9d7d541ca630020df7145235a1669bdbf40c6627..07b7be4cfff461352f73fe2dd5383e5b
  	auto& image = m_slot_images[id];
  	if (image.depth_id &&
  	    (m_slot_images[image.depth_id].info.metadata.stencil_compressed ||
-@@ -1957,7 +2126,7 @@ void TextureCache::RefreshImage(ImageId id) {
+@@ -1957,7 +2087,7 @@ void TextureCache::RefreshImage(ImageId id) {
  	if (!cpu_dirty) {
  		return;
  	}
@@ -11542,7 +11510,7 @@ index 9d7d541ca630020df7145235a1669bdbf40c6627..07b7be4cfff461352f73fe2dd5383e5b
  }
  
  ImageId TextureCache::FindStencilPlane(const Image& depth, GuestRange range) const {
-@@ -2136,6 +2305,7 @@ void TextureCache::ParkImage(ImageId id) {
+@@ -2136,6 +2266,7 @@ void TextureCache::ParkImage(ImageId id) {
  	ReleaseDepthCopies(id);
  	ReleaseDepthFeedbackCopy(id);
  	m_download_images.erase(id);
@@ -11550,7 +11518,7 @@ index 9d7d541ca630020df7145235a1669bdbf40c6627..07b7be4cfff461352f73fe2dd5383e5b
  	if (image.info.metadata.kind == ImageMetadataKind::Htile) {
  		const auto meta = m_surface_metas.find(image.info.metadata.range.address);
  		if (meta != m_surface_metas.end() && (!meta->second.owner || meta->second.owner == id)) {
-@@ -2505,7 +2675,7 @@ ImageId TextureCache::FindImageImpl(ImageDesc& desc, bool exact_format, bool spe
+@@ -2505,7 +2636,7 @@ ImageId TextureCache::FindImageImpl(ImageDesc& desc, bool exact_format, bool spe
  			auto& inserted = m_slot_images[result];
  			if (m_buffer_cache.HasGpuDirtyBytes(inserted.info.data.address,
  			                                    inserted.info.data.size)) {
@@ -11559,7 +11527,7 @@ index 9d7d541ca630020df7145235a1669bdbf40c6627..07b7be4cfff461352f73fe2dd5383e5b
  			}
  		}
  		auto& image = m_slot_images[result];
-@@ -2534,11 +2704,11 @@ ImageId TextureCache::FindImageImpl(ImageDesc& desc, bool exact_format, bool spe
+@@ -2534,11 +2665,11 @@ ImageId TextureCache::FindImageImpl(ImageDesc& desc, bool exact_format, bool spe
  	return result;
  }
  
@@ -11573,7 +11541,7 @@ index 9d7d541ca630020df7145235a1669bdbf40c6627..07b7be4cfff461352f73fe2dd5383e5b
  }
  
  ImageId TextureCache::FindImageFromRange(uint64_t address, uint64_t size, bool ensure_valid) {
-@@ -2601,7 +2771,7 @@ vk::ImageView TextureCache::FindTexture(ImageId id, const ImageDesc& desc) {
+@@ -2601,7 +2732,7 @@ vk::ImageView TextureCache::FindTexture(ImageId id, const ImageDesc& desc) {
  	    m_readback_storage_images && (!image.IsGpuModified() || image.IsDefinitelyCpuDirty()) &&
  #endif
  	    !m_buffer_cache.HasOnlyGpuDirtyBytes(image.info.data.address, image.info.data.size);
@@ -11582,7 +11550,7 @@ index 9d7d541ca630020df7145235a1669bdbf40c6627..07b7be4cfff461352f73fe2dd5383e5b
  	if (image.info.HasStencil() &&
  	    desc.info.data.address >= image.info.stencil.address &&
  	    desc.info.data.End() <= image.info.stencil.End()) {
-@@ -2616,6 +2786,7 @@ vk::ImageView TextureCache::FindTexture(ImageId id, const ImageDesc& desc) {
+@@ -2616,6 +2747,7 @@ vk::ImageView TextureCache::FindTexture(ImageId id, const ImageDesc& desc) {
  			TrackImageDownload(id, image);
  			if (first_write) {
  				m_download_images.insert(id);
@@ -11590,7 +11558,7 @@ index 9d7d541ca630020df7145235a1669bdbf40c6627..07b7be4cfff461352f73fe2dd5383e5b
  			}
  			break;
  		default: EXIT("TextureCache: invalid texture binding\n");
-@@ -2635,13 +2806,22 @@ vk::ImageView TextureCache::FindRenderTarget(ImageId id, const ImageDesc& desc)
+@@ -2635,13 +2767,23 @@ vk::ImageView TextureCache::FindRenderTarget(ImageId id, const ImageDesc& desc)
  		image.usage.render_target = true;
  		image.StateChanged();
  	}
@@ -11611,11 +11579,12 @@ index 9d7d541ca630020df7145235a1669bdbf40c6627..07b7be4cfff461352f73fe2dd5383e5b
 +}
 +
 +vk::ImageView TextureCache::FindDepthTarget(ImageId id, const ImageDesc& desc, ImageId* stencil,
++                                            vk::Extent2D render_extent, uint32_t render_layers,
 +                                            bool skip_depth_refresh, bool skip_stencil_refresh) {
  	CollectHotPagesOf(id);
  	std::scoped_lock lock {m_lock};
  	auto&            image = m_slot_images[id];
-@@ -2664,8 +2844,8 @@ vk::ImageView TextureCache::FindDepthTarget(ImageId id, const ImageDesc& desc, I
+@@ -2664,8 +2806,8 @@ vk::ImageView TextureCache::FindDepthTarget(ImageId id, const ImageDesc& desc, I
  		EXIT_IF(slice_size == 0 || offset % slice_size != 0 || offset / slice_size >= layers ||
  		        desc.info.resources.layers > layers - offset / slice_size);
  		image.stencil_subresources = {0, desc.info.resources.levels,
@@ -11626,16 +11595,18 @@ index 9d7d541ca630020df7145235a1669bdbf40c6627..07b7be4cfff461352f73fe2dd5383e5b
  	}
  	image.info.stencil = desc.info.stencil;
  	image.info.metadata = desc.info.metadata;
-@@ -2677,11 +2857,29 @@ vk::ImageView TextureCache::FindDepthTarget(ImageId id, const ImageDesc& desc, I
+@@ -2677,7 +2819,21 @@ vk::ImageView TextureCache::FindDepthTarget(ImageId id, const ImageDesc& desc, I
  		metadata->second.owner = id;
  		m_meta_epoch.fetch_add(1, std::memory_order_relaxed);
  	}
 -	RefreshImage(id);
 +	const bool fast_clear = FastImageClearEnabled();
 +	const auto& view      = desc.view_info;
-+	const bool full_sub   = view.base_level == 0 && view.level_count == image.info.resources.levels &&
-+	                        view.base_layer == 0 && view.layer_count == image.info.resources.layers;
-+	const bool discard_depth = fast_clear && skip_depth_refresh && full_sub &&
++	const bool full_clear = view.base_level == 0 && view.level_count == 1 && image.info.resources.levels == 1 &&
++	                        view.base_layer == 0 && render_layers == image.info.resources.layers &&
++	                        render_extent.width == image.info.extent.width &&
++	                        render_extent.height == image.info.extent.height;
++	const bool discard_depth = fast_clear && skip_depth_refresh && full_clear &&
 +	                           (!desc.info.HasStencil() || skip_stencil_refresh);
 +	if (discard_depth) {
 +		TrackImage(id);
@@ -11647,18 +11618,7 @@ index 9d7d541ca630020df7145235a1669bdbf40c6627..07b7be4cfff461352f73fe2dd5383e5b
  	CommitGpuWrite(image);
  	if (desc.info.HasStencil()) {
  		const auto association = AssociateStencil(id, desc.info.stencil);
--		RefreshImage(association);
-+		if (fast_clear && skip_stencil_refresh && full_sub) {
-+			TrackImage(association);
-+			m_slot_images[association].ClearBufferModified();
-+			m_slot_images[association].RefreshComplete();
-+		} else {
-+			RefreshImage(association);
-+		}
- 		if (stencil != nullptr) {
- 			*stencil = association;
- 		}
-@@ -2773,8 +2971,10 @@ bool TextureCache::ClearImageFromBuffer(CommandBuffer& command, uint64_t address
+@@ -2773,8 +2929,10 @@ bool TextureCache::ClearImageFromBuffer(CommandBuffer& command, uint64_t address
  			if (StencilFillHeldPlaneOnly() && depth.info.stencil.address != address) {
  				continue;
  			}
@@ -11671,7 +11631,7 @@ index 9d7d541ca630020df7145235a1669bdbf40c6627..07b7be4cfff461352f73fe2dd5383e5b
  			candidate = owner.info.IsDepth() ? vk::ImageAspectFlagBits::eDepth
  			                                 : vk::ImageAspectFlagBits::eColor;
  		}
-@@ -2818,6 +3018,10 @@ bool TextureCache::ClearImageFromBuffer(CommandBuffer& command, uint64_t address
+@@ -2818,6 +2976,10 @@ bool TextureCache::ClearImageFromBuffer(CommandBuffer& command, uint64_t address
  	return true;
  }
  
@@ -11682,7 +11642,7 @@ index 9d7d541ca630020df7145235a1669bdbf40c6627..07b7be4cfff461352f73fe2dd5383e5b
  void TextureCache::ClearImage(CommandBuffer& command, ImageId id, vk::Format format,
                                const vk::ImageSubresourceRange& range, const vk::ClearValue& clear) {
  	auto& image = m_slot_images[id];
-@@ -2838,7 +3042,7 @@ void TextureCache::ClearImage(CommandBuffer& command, ImageId id, vk::Format for
+@@ -2838,7 +3000,7 @@ void TextureCache::ClearImage(CommandBuffer& command, ImageId id, vk::Format for
  	const bool full_image = range.aspectMask == aspects && full_subresources;
  	TrackImage(id);
  	if (!full_image && (image.IsBufferModified() || image.IsCpuDirty())) {
@@ -11691,7 +11651,7 @@ index 9d7d541ca630020df7145235a1669bdbf40c6627..07b7be4cfff461352f73fe2dd5383e5b
  		if (image.info.samples == 1 && (image.IsBufferModified() || image.IsCpuDirty())) {
  			EXIT("TextureCache: image clear retained guest ownership\n");
  		}
-@@ -3271,14 +3475,14 @@ uint64_t TextureCache::WriteBackTick(uint64_t address, uint64_t size) {
+@@ -3271,14 +3433,14 @@ uint64_t TextureCache::WriteBackTick(uint64_t address, uint64_t size) {
  	return tick;
  }
  
@@ -11708,7 +11668,7 @@ index 9d7d541ca630020df7145235a1669bdbf40c6627..07b7be4cfff461352f73fe2dd5383e5b
  	});
  }
  
-@@ -3462,6 +3666,11 @@ bool TextureCache::HasGpuWrittenImages(uint64_t address, uint64_t size) {
+@@ -3462,6 +3624,11 @@ bool TextureCache::HasGpuWrittenImages(uint64_t address, uint64_t size) {
  }
  
  bool TextureCache::IsRegionRegistered(uint64_t address, uint64_t size) {
@@ -11720,7 +11680,7 @@ index 9d7d541ca630020df7145235a1669bdbf40c6627..07b7be4cfff461352f73fe2dd5383e5b
  	std::scoped_lock lock {m_lock};
  	bool             registered = false;
  	ForEachImageInRegion(address, size, [&](ImageId, Image&) {
-@@ -3587,6 +3796,9 @@ bool TextureCache::WriteBackImages() {
+@@ -3587,6 +3754,9 @@ bool TextureCache::WriteBackImages() {
  }
  
  bool TextureCache::DownloadQueuedImages() {
@@ -11730,7 +11690,7 @@ index 9d7d541ca630020df7145235a1669bdbf40c6627..07b7be4cfff461352f73fe2dd5383e5b
  	std::scoped_lock lock {m_lock};
  	bool             downloaded = false;
  	for (const auto id: m_download_images) {
-@@ -3595,9 +3807,11 @@ bool TextureCache::DownloadQueuedImages() {
+@@ -3595,9 +3765,11 @@ bool TextureCache::DownloadQueuedImages() {
  		}
  	}
  	m_download_images.clear();
@@ -11743,7 +11703,7 @@ index 9d7d541ca630020df7145235a1669bdbf40c6627..07b7be4cfff461352f73fe2dd5383e5b
  // Saros-Recomp change notice: Saros-Recomp modified this file for its Windows renderer. Recorded source revision: 2026-11-21. Public source revision: 2026-11-22.
 +// Saros-Recomp modified this file for the experimental Windows renderer on 2026-11-27.
 diff --git a/core/kyty/graphics/host_gpu/renderer/cache/textureCache.h b/core/kyty/graphics/host_gpu/renderer/cache/textureCache.h
-index b4d87799be14e84b76ce24b53225b8ba8b2b1ae3..0cbcfe67f4a46b0fede36cad2c2f70a8444b5f9b 100644
+index b4d87799be14e84b76ce24b53225b8ba8b2b1ae3..b92cdad13e1f82ffabfa1f65b5686fa5d6b030c2 100644
 --- a/core/kyty/graphics/host_gpu/renderer/cache/textureCache.h
 +++ b/core/kyty/graphics/host_gpu/renderer/cache/textureCache.h
 @@ -66,7 +66,18 @@ public:
@@ -11771,9 +11731,9 @@ index b4d87799be14e84b76ce24b53225b8ba8b2b1ae3..0cbcfe67f4a46b0fede36cad2c2f70a8
  	[[nodiscard]] vk::ImageView FindRenderTarget(ImageId id, const ImageDesc& desc);
  	[[nodiscard]] vk::ImageView FindDepthTarget(ImageId id, const ImageDesc& desc,
 -	                                            ImageId* stencil = nullptr);
-+	                                            ImageId* stencil = nullptr,
-+	                                            bool skip_depth_refresh = false,
-+	                                            bool skip_stencil_refresh = false);
++	                                            ImageId* stencil, vk::Extent2D render_extent,
++	                                            uint32_t render_layers, bool skip_depth_refresh,
++	                                            bool skip_stencil_refresh);
  	[[nodiscard]] Image&        GetImage(ImageId id) {
  		auto& image = m_slot_images[id];
  		TouchImage(image);
@@ -11867,7 +11827,7 @@ index e1b9424936d8d310f53bcbece1f71ce88d1845df..bdc4b96a6d64508eec269d0d0ada9b09
 +
 +// Saros-Recomp modified this file for the experimental Windows renderer on 2026-11-27.
 diff --git a/core/kyty/graphics/host_gpu/renderer/commandRecorder.h b/core/kyty/graphics/host_gpu/renderer/commandRecorder.h
-index c26c33e4ab34f33a2f6852d903ee09416de512fa..fb17b1d21260f0bf7a39c542b0b9e2d9796bc11b 100644
+index c26c33e4ab34f33a2f6852d903ee09416de512fa..3c5c3f4933cf0cdbdf699aaa84539d9931776be1 100644
 --- a/core/kyty/graphics/host_gpu/renderer/commandRecorder.h
 +++ b/core/kyty/graphics/host_gpu/renderer/commandRecorder.h
 @@ -1,6 +1,7 @@
@@ -11899,10 +11859,11 @@ index c26c33e4ab34f33a2f6852d903ee09416de512fa..fb17b1d21260f0bf7a39c542b0b9e2d9
  
 -	void sarosDispatchTimestamp(vk::QueryPool pool, bool start) const {
 +	void sarosDispatchTimestamp(vk::QueryPool pool, bool start,
-+	                            vk::PipelineStageFlagBits stage = vk::PipelineStageFlagBits::eComputeShader) const {
++	                            vk::PipelineStageFlagBits stage, bool reset = false) const {
  		auto record = [=](vk::CommandBuffer c) {
- 			if (start) c.resetQueryPool(pool, 0, 2);
+-			if (start) c.resetQueryPool(pool, 0, 2);
 -			c.writeTimestamp(vk::PipelineStageFlagBits::eComputeShader, pool, start ? 0 : 1);
++			if (reset) c.resetQueryPool(pool, 0, 2);
 +			c.writeTimestamp(stage, pool, start ? 0 : 1);
  		};
  		if (m_stream == nullptr) record(m_direct);
@@ -11921,7 +11882,7 @@ index c26c33e4ab34f33a2f6852d903ee09416de512fa..fb17b1d21260f0bf7a39c542b0b9e2d9
  // Saros-Recomp change notice: Saros-Recomp modified this file for its Windows renderer. Recorded source revision: 2026-11-21. Public source revision: 2026-11-22.
 +// Saros-Recomp modified this file for the experimental Windows renderer on 2026-11-27.
 diff --git a/core/kyty/graphics/host_gpu/renderer/commandScheduler.cpp b/core/kyty/graphics/host_gpu/renderer/commandScheduler.cpp
-index 78e7acf3eef8eda16fb9a0136000b359844fd224..76ab8b911eed042af25a90c4d946919a768e5843 100644
+index 78e7acf3eef8eda16fb9a0136000b359844fd224..44a870306ccbd448c23810a684d258e3fc3bceca 100644
 --- a/core/kyty/graphics/host_gpu/renderer/commandScheduler.cpp
 +++ b/core/kyty/graphics/host_gpu/renderer/commandScheduler.cpp
 @@ -1,3 +1,4 @@
@@ -11939,7 +11900,7 @@ index 78e7acf3eef8eda16fb9a0136000b359844fd224..76ab8b911eed042af25a90c4d946919a
  #include <chrono>
  #include <limits>
  #include <optional>
-@@ -37,6 +41,136 @@ static bool SubmitCensusEnabled() {
+@@ -37,6 +41,135 @@ static bool SubmitCensusEnabled() {
  
  static thread_local CommandScheduler* g_deferred_callback_scheduler = nullptr;
  
@@ -11978,7 +11939,6 @@ index 78e7acf3eef8eda16fb9a0136000b359844fd224..76ab8b911eed042af25a90c4d946919a
 +			info.queryType  = vk::QueryType::eTimestamp;
 +			info.queryCount = Pairs * 2;
 +			if (device.createQueryPool(&info, nullptr, &pool) != vk::Result::eSuccess) return UINT32_MAX;
-+			device.resetQueryPool(pool, 0, Pairs * 2);
 +			period = graphics.physical_device_properties.limits.timestampPeriod;
 +			used.assign(Pairs, false);
 +		}
@@ -11986,6 +11946,7 @@ index 78e7acf3eef8eda16fb9a0136000b359844fd224..76ab8b911eed042af25a90c4d946919a
 +		if (used[slot]) return open = UINT32_MAX;
 +		next       = (next + 1) % Pairs;
 +		used[slot] = true;
++		buffer.resetQueryPool(pool, slot * 2, 2);
 +		buffer.writeTimestamp(vk::PipelineStageFlagBits::eTopOfPipe, pool, slot * 2);
 +		return open = slot;
 +	}
@@ -12014,7 +11975,6 @@ index 78e7acf3eef8eda16fb9a0136000b359844fd224..76ab8b911eed042af25a90c4d946919a
 +				Common::FrameCensus::TraceGpu(submit_ns, static_cast<uint64_t>(static_cast<double>(stamps[0]) * period),
 +				                              static_cast<uint64_t>(static_cast<double>(stamps[1]) * period), tick);
 +			}
-+			device.resetQueryPool(pool, slot * 2, 2);
 +			used[slot] = false;
 +		}
 +		if (window_frame < 0) window_frame = frame;
@@ -12076,7 +12036,7 @@ index 78e7acf3eef8eda16fb9a0136000b359844fd224..76ab8b911eed042af25a90c4d946919a
  CommandScheduler::CommandPool::CommandPool(GraphicContext& graphics, MasterSemaphore& master)
      : m_graphics(graphics), m_master(master) {
  	EXIT_IF(graphics.queue_family == static_cast<uint32_t>(-1));
-@@ -201,12 +335,27 @@ void CommandScheduler::Begin(const HW::Context& registers, const HW::UserConfig&
+@@ -201,12 +334,27 @@ void CommandScheduler::Begin(const HW::Context& registers, const HW::UserConfig&
  	BeginNext();
  }
  
@@ -12104,7 +12064,7 @@ index 78e7acf3eef8eda16fb9a0136000b359844fd224..76ab8b911eed042af25a90c4d946919a
  	Submit(submit, caller);
  	BeginNext();
  }
-@@ -216,7 +365,10 @@ void CommandScheduler::Finish(std::source_location caller) {
+@@ -216,7 +364,10 @@ void CommandScheduler::Finish(std::source_location caller) {
  	if (!m_command.IsInvalid()) {
  		Submit({}, caller);
  	}
@@ -12116,7 +12076,7 @@ index 78e7acf3eef8eda16fb9a0136000b359844fd224..76ab8b911eed042af25a90c4d946919a
  	BeginNext();
  	PopPendingOperations();
  }
-@@ -227,9 +379,13 @@ void CommandScheduler::Wait(uint64_t tick, std::source_location caller) {
+@@ -227,9 +378,13 @@ void CommandScheduler::Wait(uint64_t tick, std::source_location caller) {
  		CheckActive();
  		const auto submitted_tick = Submit({}, caller);
  		EXIT_IF(submitted_tick != tick);
@@ -12131,7 +12091,7 @@ index 78e7acf3eef8eda16fb9a0136000b359844fd224..76ab8b911eed042af25a90c4d946919a
  		m_master.Wait(tick);
  	}
  }
-@@ -310,6 +466,7 @@ void CommandScheduler::DeferPriorityOperationAfter(uint64_t tick, Common::Unique
+@@ -310,6 +465,7 @@ void CommandScheduler::DeferPriorityOperationAfter(uint64_t tick, Common::Unique
  				tick = std::max(tick, m_priority_operations.back().tick);
  			}
  			tick = std::max(tick, m_priority_active_tick);
@@ -12139,7 +12099,7 @@ index 78e7acf3eef8eda16fb9a0136000b359844fd224..76ab8b911eed042af25a90c4d946919a
  			m_priority_operations.push({std::move(tracked), tick});
  			lock.unlock();
  			m_operation_available.notify_one();
-@@ -346,6 +503,7 @@ void CommandScheduler::DeferFlipCompletion(Common::UniqueFunction<void>&& comple
+@@ -346,6 +502,7 @@ void CommandScheduler::DeferFlipCompletion(Common::UniqueFunction<void>&& comple
  	CheckActive();
  	EXIT_IF(!complete);
  	const uint64_t previous = std::exchange(m_last_flip_tick, CurrentTick());
@@ -12147,7 +12107,7 @@ index 78e7acf3eef8eda16fb9a0136000b359844fd224..76ab8b911eed042af25a90c4d946919a
  	if (!EarlyFlipEnabled()) {
  		QueuePriorityOperation(std::move(complete));
  		return;
-@@ -376,7 +534,7 @@ void CommandScheduler::FlipCompletionThread(std::stop_token stop) {
+@@ -376,7 +533,7 @@ void CommandScheduler::FlipCompletionThread(std::stop_token stop) {
  			m_flip_running = true;
  		}
  		if (flip.previous_tick != 0) {
@@ -12156,7 +12116,7 @@ index 78e7acf3eef8eda16fb9a0136000b359844fd224..76ab8b911eed042af25a90c4d946919a
  			WaitPriorityOperations(flip.previous_tick);
  		}
  		RunOperation(std::move(flip.complete));
-@@ -462,7 +620,20 @@ void CommandScheduler::QueueOperation(Common::UniqueFunction<void>&& operation)
+@@ -462,7 +619,20 @@ void CommandScheduler::QueueOperation(Common::UniqueFunction<void>&& operation)
  	EXIT_IF(!operation);
  	std::unique_lock lock(m_operation_mutex);
  	if (m_operation_state == OperationState::Open) {
@@ -12178,7 +12138,7 @@ index 78e7acf3eef8eda16fb9a0136000b359844fd224..76ab8b911eed042af25a90c4d946919a
  		if (m_pending_operations.size() == 1) {
  			m_pending_front_tick.store(m_pending_operations.front().tick,
  			                           std::memory_order_release);
-@@ -485,7 +656,21 @@ void CommandScheduler::QueuePriorityOperation(Common::UniqueFunction<void>&& ope
+@@ -485,7 +655,21 @@ void CommandScheduler::QueuePriorityOperation(Common::UniqueFunction<void>&& ope
  	EXIT_IF(!operation);
  	std::unique_lock lock(m_operation_mutex);
  	if (m_operation_state == OperationState::Open) {
@@ -12201,7 +12161,7 @@ index 78e7acf3eef8eda16fb9a0136000b359844fd224..76ab8b911eed042af25a90c4d946919a
  		lock.unlock();
  		m_operation_available.notify_one();
  		return;
-@@ -521,7 +706,7 @@ void CommandScheduler::PriorityOperationsThread(std::stop_token stop) {
+@@ -521,7 +705,7 @@ void CommandScheduler::PriorityOperationsThread(std::stop_token stop) {
  			m_priority_operations.pop();
  			m_priority_active_tick = operation.tick;
  		}
@@ -12210,7 +12170,7 @@ index 78e7acf3eef8eda16fb9a0136000b359844fd224..76ab8b911eed042af25a90c4d946919a
  		if (!stop.stop_requested()) {
  			RunOperation(std::move(operation.callback));
  		}
-@@ -550,6 +735,16 @@ void CommandScheduler::WaitPriorityOperations(uint64_t tick) {
+@@ -550,6 +734,16 @@ void CommandScheduler::WaitPriorityOperations(uint64_t tick) {
  		Flush();
  	}
  #endif
@@ -12227,7 +12187,7 @@ index 78e7acf3eef8eda16fb9a0136000b359844fd224..76ab8b911eed042af25a90c4d946919a
  	std::unique_lock lock(m_operation_mutex);
  	m_operation_available.wait(lock, [this, tick] {
  		const bool active_before_or_at =
-@@ -618,6 +813,7 @@ uint64_t CommandScheduler::Submit(SubmitInfo submit, std::source_location caller
+@@ -618,6 +812,7 @@ uint64_t CommandScheduler::Submit(SubmitInfo submit, std::source_location caller
  		recorded->info = submit;
  		recorded->tick = tick;
  		recorded->host_copies = m_host_copies != nullptr ? m_host_copies->Flush() : 0;
@@ -12235,7 +12195,7 @@ index 78e7acf3eef8eda16fb9a0136000b359844fd224..76ab8b911eed042af25a90c4d946919a
  		m_stream.Publish();
  		m_command.m_open = false;
  		return tick;
-@@ -629,6 +825,11 @@ uint64_t CommandScheduler::Submit(SubmitInfo submit, std::source_location caller
+@@ -629,6 +824,11 @@ uint64_t CommandScheduler::Submit(SubmitInfo submit, std::source_location caller
  }
  
  void CommandScheduler::QueueSubmit(vk::CommandBuffer buffer, SubmitInfo& submit, uint64_t tick) {
@@ -12247,7 +12207,7 @@ index 78e7acf3eef8eda16fb9a0136000b359844fd224..76ab8b911eed042af25a90c4d946919a
  	auto& graphics = m_graphics;
  	EXIT_IF(graphics.queue == nullptr);
  	submit.AddSignal(m_master.Handle(), tick);
-@@ -644,8 +845,8 @@ void CommandScheduler::QueueSubmit(vk::CommandBuffer buffer, SubmitInfo& submit,
+@@ -644,8 +844,8 @@ void CommandScheduler::QueueSubmit(vk::CommandBuffer buffer, SubmitInfo& submit,
  	submit_info.waitSemaphoreCount   = submit.num_wait_semaphores;
  	submit_info.pWaitSemaphores      = submit.wait_semaphores.data();
  	submit_info.pWaitDstStageMask    = submit.wait_stages.data();
@@ -12258,7 +12218,7 @@ index 78e7acf3eef8eda16fb9a0136000b359844fd224..76ab8b911eed042af25a90c4d946919a
  	submit_info.signalSemaphoreCount = submit.num_signal_semaphores;
  	submit_info.pSignalSemaphores    = submit.signal_semaphores.data();
  
-@@ -659,6 +860,7 @@ void CommandScheduler::QueueSubmit(vk::CommandBuffer buffer, SubmitInfo& submit,
+@@ -659,6 +859,7 @@ void CommandScheduler::QueueSubmit(vk::CommandBuffer buffer, SubmitInfo& submit,
  			Common::LockGuard lock(graphics.queue_mutex);
  			acquired = Clock::now();
  			result = graphics.queue.submit(1, &submit_info, nullptr);
@@ -12266,7 +12226,7 @@ index 78e7acf3eef8eda16fb9a0136000b359844fd224..76ab8b911eed042af25a90c4d946919a
  		}
  		const auto returned = Clock::now();
  		struct Totals {
-@@ -667,7 +869,7 @@ void CommandScheduler::QueueSubmit(vk::CommandBuffer buffer, SubmitInfo& submit,
+@@ -667,7 +868,7 @@ void CommandScheduler::QueueSubmit(vk::CommandBuffer buffer, SubmitInfo& submit,
  		};
  		static thread_local Totals totals;
  		++totals.submits;
@@ -12275,7 +12235,7 @@ index 78e7acf3eef8eda16fb9a0136000b359844fd224..76ab8b911eed042af25a90c4d946919a
  		totals.waits += submit.num_wait_semaphores != 0;
  		totals.extra_signals += submit.num_signal_semaphores > 1;
  		totals.lock_time += std::chrono::duration_cast<std::chrono::nanoseconds>(acquired - before_lock);
-@@ -684,6 +886,7 @@ void CommandScheduler::QueueSubmit(vk::CommandBuffer buffer, SubmitInfo& submit,
+@@ -684,6 +885,7 @@ void CommandScheduler::QueueSubmit(vk::CommandBuffer buffer, SubmitInfo& submit,
  	{
  		Common::LockGuard lock(graphics.queue_mutex);
  		result = graphics.queue.submit(1, &submit_info, nullptr);
@@ -12283,7 +12243,7 @@ index 78e7acf3eef8eda16fb9a0136000b359844fd224..76ab8b911eed042af25a90c4d946919a
  	}
  	Common::DebugCounters::Add(Common::DebugCounters::Counter::QueueSubmits);
  
-@@ -704,46 +907,284 @@ void CommandScheduler::QueueSubmit(vk::CommandBuffer buffer, SubmitInfo& submit,
+@@ -704,46 +906,284 @@ void CommandScheduler::QueueSubmit(vk::CommandBuffer buffer, SubmitInfo& submit,
  void CommandScheduler::RecordingThread() {
  	KYTY_PROFILER_THREAD("Thread_GpuRecord");
  	Config::ConfigureGpuStageThread(Config::GpuStageThread::Recording);
@@ -12583,7 +12543,7 @@ index 78e7acf3eef8eda16fb9a0136000b359844fd224..76ab8b911eed042af25a90c4d946919a
  }
  
  void CommandScheduler::BeginNext() {
-@@ -754,3 +1195,4 @@ void CommandScheduler::BeginNext() {
+@@ -754,3 +1194,4 @@ void CommandScheduler::BeginNext() {
  }
  
  // Saros-Recomp change notice: Saros-Recomp modified this file for its Windows renderer. Recorded source revisions: 2026-11-21, 2026-11-22. Public source revision: 2026-11-22.
@@ -13266,7 +13226,7 @@ index 61d2fece13da7be8ae985a104522556d2ccfb44c..a3f42ae6c1daae7d4622d36e9fee0cc3
 +
 +// Saros-Recomp modified this file for the experimental Windows renderer on 2026-11-27.
 diff --git a/core/kyty/graphics/host_gpu/renderer/pipeline/descriptors.cpp b/core/kyty/graphics/host_gpu/renderer/pipeline/descriptors.cpp
-index 26bd8d721696dcbdb5117fff532e0b699e427179..ebe106446232f8ff6e82fcc6501f208372b6880c 100644
+index 26bd8d721696dcbdb5117fff532e0b699e427179..d90c69139ad3f9065370d46c70f87b1ddb9f407d 100644
 --- a/core/kyty/graphics/host_gpu/renderer/pipeline/descriptors.cpp
 +++ b/core/kyty/graphics/host_gpu/renderer/pipeline/descriptors.cpp
 @@ -7,6 +7,7 @@
@@ -13410,7 +13370,7 @@ index 26bd8d721696dcbdb5117fff532e0b699e427179..ebe106446232f8ff6e82fcc6501f2083
  	const bool candidate =
  	    table_candidate || resource.heap ||
  	    resource.indirect_root != ShaderRecompiler::IR::ImageResource::NoIndirectImage;
-@@ -1779,30 +1830,44 @@ void RenderExecutor::RebindReusedTables(PreparedBindings& prepared) {
+@@ -1779,30 +1830,40 @@ void RenderExecutor::RebindReusedTables(PreparedBindings& prepared) {
  }
  
  void RenderExecutor::FlushDeferredDispatchBarrier() {
@@ -13453,17 +13413,13 @@ index 26bd8d721696dcbdb5117fff532e0b699e427179..ebe106446232f8ff6e82fcc6501f2083
 -	if (m_deferred_barrier && dispatch && !guest_sync && queue == m_deferred_barrier_queue) {
 -		m_dispatch_chained = true;
 +	if (!force_flush && m_deferred_barrier && dispatch && queue == m_deferred_barrier_queue) {
-+		if (!guest_sync) {
-+			m_dispatch_chained    = true;
-+			m_dispatch_needs_sync = false;
-+		} else {
-+			m_dispatch_chained    = false;
-+			m_dispatch_needs_sync = true;
-+		}
++		// A dispatch can return early, so keep an unconsumed acquire across the next dispatch.
++		m_dispatch_needs_sync |= guest_sync;
++		m_dispatch_chained = !m_dispatch_needs_sync;
  		return;
  	}
  	FlushDeferredDispatchBarrier();
-@@ -1888,9 +1953,7 @@ void RenderExecutor::PrepareBindings(const ShaderStageRuntime& runtime,
+@@ -1888,9 +1949,7 @@ void RenderExecutor::PrepareBindings(const ShaderStageRuntime& runtime,
  			auto* derived = prepared.image_descs[i];
  			if (!same_images &&
  			    (derived == nullptr || !same_slots || prepared.last_images[i] != snapshot.images[i])) {
@@ -13474,7 +13430,7 @@ index 26bd8d721696dcbdb5117fff532e0b699e427179..ebe106446232f8ff6e82fcc6501f2083
  			}
  			if (derived != nullptr && derived->found.valid &&
  			    ReuseTextureLookup(*derived, prepared.images[i])) {
-@@ -1940,50 +2003,49 @@ void RenderExecutor::PrepareBindings(const ShaderStageRuntime& runtime,
+@@ -1940,50 +1999,49 @@ void RenderExecutor::PrepareBindings(const ShaderStageRuntime& runtime,
  			table_state->elements.clear();
  		}
  	}
@@ -13567,7 +13523,7 @@ index 26bd8d721696dcbdb5117fff532e0b699e427179..ebe106446232f8ff6e82fcc6501f2083
  	if (!same_program || prepared.samplers.size() != program.info.samplers.size() ||
  	    prepared.last_samplers != snapshot.samplers) {
  		prepared.samplers.clear();
-@@ -2419,21 +2481,36 @@ void RenderExecutor::FindBuffers(std::span<PreparedBindings* const> stages, bool
+@@ -2419,21 +2477,36 @@ void RenderExecutor::FindBuffers(std::span<PreparedBindings* const> stages, bool
  				size = std::min(std::min(size, uint64_t {256} * 1024 * 1024), limit);
  			}
  			if (size >= BufferMapCheckFloor(address, size) || descriptor.NumRecords() == UINT32_MAX) {
@@ -13616,7 +13572,7 @@ index 26bd8d721696dcbdb5117fff532e0b699e427179..ebe106446232f8ff6e82fcc6501f2083
  			}
  			source = {address, size, find_buffers ? cache.FindBuffer(address, size) : NULL_BUFFER_ID};
  		}
-@@ -2490,7 +2567,8 @@ void RenderExecutor::RebindBuffers(PreparedBindings& prepared) {
+@@ -2490,7 +2563,8 @@ void RenderExecutor::RebindBuffers(PreparedBindings& prepared) {
  			prepared.buffers[index] = shared->view;
  			buffer_offset           = shared->offset;
  		} else {
@@ -13626,7 +13582,7 @@ index 26bd8d721696dcbdb5117fff532e0b699e427179..ebe106446232f8ff6e82fcc6501f2083
  			if (share && m_draw_buffer_view_count < m_draw_buffer_views.size()) {
  				m_draw_buffer_views[m_draw_buffer_view_count++] = {source.address, source.size, flags, buffer_offset,
  				                                                   prepared.buffers[index]};
-@@ -2881,9 +2959,27 @@ void RenderExecutor::CommitBindings(CommandBuffer&                     buffer,
+@@ -2881,9 +2955,27 @@ void RenderExecutor::CommitBindings(CommandBuffer&                     buffer,
  			    shader_stages, vk::DependencyFlags {}, 0, nullptr, 1, &barrier, 0, nullptr);
  		}
  
@@ -13654,7 +13610,7 @@ index 26bd8d721696dcbdb5117fff532e0b699e427179..ebe106446232f8ff6e82fcc6501f2083
  			const auto&                 view = binding.desc.view_info;
  			const ImageSubresourceRange range {view.base_level, view.level_count, view.base_layer,
  			                                   view.layer_count};
-@@ -2900,23 +2996,27 @@ void RenderExecutor::CommitBindings(CommandBuffer&                     buffer,
+@@ -2900,23 +2992,27 @@ void RenderExecutor::CommitBindings(CommandBuffer&                     buffer,
  						EXIT("sampling a writable depth/stencil attachment aspect\n");
  					}
  				}
@@ -13693,7 +13649,7 @@ index 26bd8d721696dcbdb5117fff532e0b699e427179..ebe106446232f8ff6e82fcc6501f2083
  			}
  			binding.layout = image.backing.state.layout;
  		};
-@@ -2934,6 +3034,7 @@ void RenderExecutor::CommitBindings(CommandBuffer&                     buffer,
+@@ -2934,6 +3030,7 @@ void RenderExecutor::CommitBindings(CommandBuffer&                     buffer,
  				transit(table_state->elements[index].resolution->texture);
  			}
  		}
@@ -13701,7 +13657,7 @@ index 26bd8d721696dcbdb5117fff532e0b699e427179..ebe106446232f8ff6e82fcc6501f2083
  
  		const bool copy_tables = !pipeline.uses_push_descriptors && table_state != nullptr &&
  		                         descriptors.tables_reused && table_state->slot_set_current;
-@@ -3271,3 +3372,4 @@ void RenderExecutor::CommitBindings(CommandBuffer&                     buffer,
+@@ -3271,3 +3368,4 @@ void RenderExecutor::CommitBindings(CommandBuffer&                     buffer,
  }
  
  // Saros-Recomp change notice: Saros-Recomp modified this file for its Windows renderer. Recorded source revision: 2026-11-22. Public source revision: 2026-11-22.
@@ -15068,7 +15024,7 @@ index fbb9da9b1477a72b3486c3c0064fd27c53d9731a..6455c8c1a1e7a9261deeb7ddd0bf815c
 +
 +// Saros-Recomp modified this file for the experimental Windows renderer on 2026-11-27.
 diff --git a/core/kyty/graphics/host_gpu/renderer/renderCompute.cpp b/core/kyty/graphics/host_gpu/renderer/renderCompute.cpp
-index 332f5cf8405cd560dcc4a34579a2921ed57cdaa5..9e4028502db78303a6645b3ad2ec18f2a2cafb02 100644
+index 332f5cf8405cd560dcc4a34579a2921ed57cdaa5..b752aff17b08341bc72c90b12572475e02c827e2 100644
 --- a/core/kyty/graphics/host_gpu/renderer/renderCompute.cpp
 +++ b/core/kyty/graphics/host_gpu/renderer/renderCompute.cpp
 @@ -1,3 +1,4 @@
@@ -15338,7 +15294,17 @@ index 332f5cf8405cd560dcc4a34579a2921ed57cdaa5..9e4028502db78303a6645b3ad2ec18f2
  static bool HasStorageWrites(const ShaderComputeInputInfo& input_info,
                               const PreparedBindings&       bindings, bool indirect_writes) {
  	const auto& images = input_info.stage.module->info.info.images;
-@@ -492,8 +748,10 @@ void RenderExecutor::DispatchDirect(CommandBuffer& buffer, uint32_t thread_group
+@@ -460,7 +716,8 @@ void RenderExecutor::DispatchDirect(CommandBuffer& buffer, uint32_t thread_group
+ 
+ 	const auto shader_generation = ShaderMapGeneration();
+ 	if (m_linear_copy_shader != 0 && cs_regs.cs_regs.data_addr == m_linear_copy_shader &&
+-	    shader_generation == m_linear_copy_generation && (++m_linear_copy_uses & 63u) != 0 &&
++	    !m_dispatch_needs_sync && shader_generation == m_linear_copy_generation &&
++	    (++m_linear_copy_uses & 63u) != 0 &&
+ 	    TryLinearCopy(cs_regs, thread_group_x, thread_group_y, thread_group_z, mode)) {
+ 		ResetBindings();
+ 		return;
+@@ -492,8 +749,10 @@ void RenderExecutor::DispatchDirect(CommandBuffer& buffer, uint32_t thread_group
  	m_context.GetImageHeap().BeginDraw();
  	const ShaderComputeInputInfo pristine = input_info;
  	const ShaderModule* compute_module = nullptr;
@@ -15349,7 +15315,7 @@ index 332f5cf8405cd560dcc4a34579a2921ed57cdaa5..9e4028502db78303a6645b3ad2ec18f2
  	}
  	const bool fell_back = compute_module != nullptr && RtCheck().FallsBack(compute_module->info.shader_hash);
  	if (fell_back) {
-@@ -516,6 +774,7 @@ void RenderExecutor::DispatchDirect(CommandBuffer& buffer, uint32_t thread_group
+@@ -516,6 +775,7 @@ void RenderExecutor::DispatchDirect(CommandBuffer& buffer, uint32_t thread_group
  	    (TryConsumeComputeMetaClear(input_info, buffer) ||
  	     TryConsumeComputeFill(input_info, buffer, thread_group_x, thread_group_y,
  	                           thread_group_z, mode))) {
@@ -15357,7 +15323,7 @@ index 332f5cf8405cd560dcc4a34579a2921ed57cdaa5..9e4028502db78303a6645b3ad2ec18f2
  		TableDispatchSpecial(cs_regs, use_thread_dimensions, "dispatch: a metadata clear or fill");
  		if (m_replicated[2] != 0 && ::Loader::DemonsSoulsTitle::IsSupportedGame() &&
  		    (cs_regs.cs_regs.data_addr != m_linear_copy_shader || shader_generation != m_linear_copy_generation) &&
-@@ -566,7 +825,8 @@ void RenderExecutor::DispatchDirect(CommandBuffer& buffer, uint32_t thread_group
+@@ -566,7 +826,8 @@ void RenderExecutor::DispatchDirect(CommandBuffer& buffer, uint32_t thread_group
  			m_context.CacheDmaBases(input_info.stage);
  			const ShaderStageRuntime* const dma_stage = &input_info.stage;
  			const bool reach_synchronized = m_context.SynchronizeDmaFootprint(std::span {&dma_stage, 1});
@@ -15367,7 +15333,7 @@ index 332f5cf8405cd560dcc4a34579a2921ed57cdaa5..9e4028502db78303a6645b3ad2ec18f2
  			if (program.bindings.descriptor_counts[static_cast<size_t>(ShaderRecompiler::IR::DescriptorBindingKind::Buffers)] != 0) {
  				m_context.GetBufferCache().RequestFlushForReadbacks();
  			}
-@@ -581,11 +841,18 @@ void RenderExecutor::DispatchDirect(CommandBuffer& buffer, uint32_t thread_group
+@@ -581,11 +842,18 @@ void RenderExecutor::DispatchDirect(CommandBuffer& buffer, uint32_t thread_group
  		m_context.GetOcclusionQueries().WriteForReaders();
  
  		const auto vk_buffer = buffer.Handle();
@@ -15386,7 +15352,7 @@ index 332f5cf8405cd560dcc4a34579a2921ed57cdaa5..9e4028502db78303a6645b3ad2ec18f2
  		CommitBindings(buffer, vk::PipelineBindPoint::eCompute, pipeline,
  		               std::span {&descriptor_stage, 1u});
  #if defined(ANYPS5_KYTY)
-@@ -593,9 +860,94 @@ void RenderExecutor::DispatchDirect(CommandBuffer& buffer, uint32_t thread_group
+@@ -593,9 +861,94 @@ void RenderExecutor::DispatchDirect(CommandBuffer& buffer, uint32_t thread_group
  		                                                              program.shader_hash);
  #endif
  		bool has_storage_writes = HasStorageWrites(input_info, bindings, indirect_writes);
@@ -15483,7 +15449,7 @@ index 332f5cf8405cd560dcc4a34579a2921ed57cdaa5..9e4028502db78303a6645b3ad2ec18f2
  		}
  		if (Config::GraphicsDebugDumpEnabled()) {
  			const auto sampled_images = std::count_if(
-@@ -661,6 +1013,8 @@ void RenderExecutor::DispatchDirect(CommandBuffer& buffer, uint32_t thread_group
+@@ -661,6 +1014,8 @@ void RenderExecutor::DispatchDirect(CommandBuffer& buffer, uint32_t thread_group
  
  		vk_buffer.bindPipeline(vk::PipelineBindPoint::eCompute, pipeline.pipeline);
  		const auto timed_query = BeginSarosDispatchSample(m_context, vk_buffer, program.shader_hash);
@@ -15492,7 +15458,7 @@ index 332f5cf8405cd560dcc4a34579a2921ed57cdaa5..9e4028502db78303a6645b3ad2ec18f2
  		constexpr uint32_t DISPATCH_INITIATOR_ORDERED_APPEND_ENABLE = 1u << 3u;
  		const uint64_t     group_threads = uint64_t {std::max(input_info.threads_num[0], 1u)} *
  		                                   std::max(input_info.threads_num[1], 1u) *
-@@ -680,6 +1034,8 @@ void RenderExecutor::DispatchDirect(CommandBuffer& buffer, uint32_t thread_group
+@@ -680,6 +1035,8 @@ void RenderExecutor::DispatchDirect(CommandBuffer& buffer, uint32_t thread_group
  		} else {
  			vk_buffer.dispatch(thread_group_x, thread_group_y, thread_group_z);
  		}
@@ -15501,7 +15467,7 @@ index 332f5cf8405cd560dcc4a34579a2921ed57cdaa5..9e4028502db78303a6645b3ad2ec18f2
  		if (timed_query) EndSarosDispatchSample(m_context, vk_buffer, timed_query, m_context.GetGpu().GetFrameNum(), program.shader_hash, "direct");
  		Common::DebugCounters::Add(Common::DebugCounters::Counter::Dispatches);
  		if (rt_pass == 1) {
-@@ -688,8 +1044,11 @@ void RenderExecutor::DispatchDirect(CommandBuffer& buffer, uint32_t thread_group
+@@ -688,8 +1045,11 @@ void RenderExecutor::DispatchDirect(CommandBuffer& buffer, uint32_t thread_group
  			RtCheck().AfterGuest(bindings);
  		}
  
@@ -15515,7 +15481,7 @@ index 332f5cf8405cd560dcc4a34579a2921ed57cdaa5..9e4028502db78303a6645b3ad2ec18f2
  		ResetBindings();
  	};
  	if (RtCheck().Sample(*compute_module, buffer)) {
-@@ -782,6 +1141,8 @@ void RenderExecutor::DispatchIndirectThreads(CommandBuffer& buffer, uint64_t arg
+@@ -782,6 +1142,8 @@ void RenderExecutor::DispatchIndirectThreads(CommandBuffer& buffer, uint64_t arg
  	ShaderComputeInputInfo input_info {};
  	m_context.GetImageHeap().BeginDraw();
  	const ShaderModule*    compute_module = nullptr;
@@ -15524,7 +15490,7 @@ index 332f5cf8405cd560dcc4a34579a2921ed57cdaa5..9e4028502db78303a6645b3ad2ec18f2
  	if (!TakeResolvedDispatch(input_info, compute_module)) {
  		input_info.async_compute              = async_compute;
  		input_info.dispatch_thread_dimensions = true;
-@@ -807,6 +1168,7 @@ void RenderExecutor::DispatchIndirectThreads(CommandBuffer& buffer, uint64_t arg
+@@ -807,6 +1169,7 @@ void RenderExecutor::DispatchIndirectThreads(CommandBuffer& buffer, uint64_t arg
  		m_context.CacheDmaBases(input_info.stage);
  		const ShaderStageRuntime* const dma_stage = &input_info.stage;
  		const bool reach_synchronized = m_context.SynchronizeDmaFootprint(std::span {&dma_stage, 1});
@@ -15532,7 +15498,7 @@ index 332f5cf8405cd560dcc4a34579a2921ed57cdaa5..9e4028502db78303a6645b3ad2ec18f2
  		m_context.PrepareBda(MayWriteThroughDeviceAddresses(program), !reach_synchronized);
  		if (program.bindings.descriptor_counts[static_cast<size_t>(ShaderRecompiler::IR::DescriptorBindingKind::Buffers)] != 0) {
  			m_context.GetBufferCache().RequestFlushForReadbacks();
-@@ -877,6 +1239,11 @@ void RenderExecutor::DispatchIndirectThreads(CommandBuffer& buffer, uint64_t arg
+@@ -877,6 +1240,11 @@ void RenderExecutor::DispatchIndirectThreads(CommandBuffer& buffer, uint64_t arg
  	push.groups_index  = 0;
  	push.limit_index   = thread_limit ? program.bindings.dispatch_thread_dword : 4u;
  
@@ -15544,7 +15510,7 @@ index 332f5cf8405cd560dcc4a34579a2921ed57cdaa5..9e4028502db78303a6645b3ad2ec18f2
  	vk::MemoryBarrier before {};
  	before.srcAccessMask = vk::AccessFlagBits::eShaderWrite | vk::AccessFlagBits::eTransferWrite |
  	                       vk::AccessFlagBits::eHostWrite;
-@@ -898,6 +1265,10 @@ void RenderExecutor::DispatchIndirectThreads(CommandBuffer& buffer, uint64_t arg
+@@ -898,6 +1266,10 @@ void RenderExecutor::DispatchIndirectThreads(CommandBuffer& buffer, uint64_t arg
  	                          vk::PipelineStageFlagBits::eDrawIndirect |
  	                              vk::PipelineStageFlagBits::eComputeShader,
  	                          {}, 1, &after, 0, nullptr, 0, nullptr);
@@ -15555,7 +15521,7 @@ index 332f5cf8405cd560dcc4a34579a2921ed57cdaa5..9e4028502db78303a6645b3ad2ec18f2
  
  	CommitBindings(buffer, vk::PipelineBindPoint::eCompute, pipeline,
  	               std::span {&descriptor_stage, 1u});
-@@ -911,14 +1282,31 @@ void RenderExecutor::DispatchIndirectThreads(CommandBuffer& buffer, uint64_t arg
+@@ -911,14 +1283,31 @@ void RenderExecutor::DispatchIndirectThreads(CommandBuffer& buffer, uint64_t arg
  		    return image.written && image.resource_class ==
  		                                ShaderRecompiler::IR::ImageResourceClass::Storage;
  	    });
@@ -15589,7 +15555,7 @@ index 332f5cf8405cd560dcc4a34579a2921ed57cdaa5..9e4028502db78303a6645b3ad2ec18f2
  	ResetBindings();
  }
  
-@@ -929,6 +1317,13 @@ void RenderExecutor::DispatchIndirect(CommandBuffer& buffer, uint64_t args_addr,
+@@ -929,6 +1318,13 @@ void RenderExecutor::DispatchIndirect(CommandBuffer& buffer, uint64_t args_addr,
  	m_context.GetCommandScheduler().PopPendingOperations();
  	Common::LockGuard lock(m_context.GetMutex());
  	vk::DispatchIndirectCommand args {};
@@ -15603,7 +15569,7 @@ index 332f5cf8405cd560dcc4a34579a2921ed57cdaa5..9e4028502db78303a6645b3ad2ec18f2
  	if (!m_context.GetBufferCache().HasGpuDirtyBytes(args_addr, sizeof(args)) &&
  	    LibKernel::Memory::TryReadBacking(args_addr, &args, sizeof(args)) &&
  	    (args.x == 0 || args.y == 0 || args.z == 0)) {
-@@ -950,9 +1345,11 @@ void RenderExecutor::DispatchIndirect(CommandBuffer& buffer, uint64_t args_addr,
+@@ -950,9 +1346,11 @@ void RenderExecutor::DispatchIndirect(CommandBuffer& buffer, uint64_t args_addr,
  	pristine.async_compute         = async_compute;
  	pristine.indirect_args_address = args_addr;
  	const ShaderModule* compute_module = nullptr;
@@ -15615,7 +15581,7 @@ index 332f5cf8405cd560dcc4a34579a2921ed57cdaa5..9e4028502db78303a6645b3ad2ec18f2
  	}
  	const bool fell_back = compute_module != nullptr && RtCheck().FallsBack(compute_module->info.shader_hash);
  	if (fell_back) {
-@@ -976,7 +1373,8 @@ void RenderExecutor::DispatchIndirect(CommandBuffer& buffer, uint64_t args_addr,
+@@ -976,7 +1374,8 @@ void RenderExecutor::DispatchIndirect(CommandBuffer& buffer, uint64_t args_addr,
  			m_context.CacheDmaBases(input_info.stage);
  			const ShaderStageRuntime* const dma_stage = &input_info.stage;
  			const bool reach_synchronized = m_context.SynchronizeDmaFootprint(std::span {&dma_stage, 1});
@@ -15625,7 +15591,7 @@ index 332f5cf8405cd560dcc4a34579a2921ed57cdaa5..9e4028502db78303a6645b3ad2ec18f2
  			if (program.bindings.descriptor_counts[static_cast<size_t>(ShaderRecompiler::IR::DescriptorBindingKind::Buffers)] != 0) {
  				m_context.GetBufferCache().RequestFlushForReadbacks();
  			}
-@@ -992,35 +1390,157 @@ void RenderExecutor::DispatchIndirect(CommandBuffer& buffer, uint64_t args_addr,
+@@ -992,35 +1391,157 @@ void RenderExecutor::DispatchIndirect(CommandBuffer& buffer, uint64_t args_addr,
  		EXIT_IF((args_offset & 3u) != 0);
  		RebindBuffers(bindings);
  		m_context.GetOcclusionQueries().WriteForReaders();
@@ -15795,7 +15761,7 @@ index 332f5cf8405cd560dcc4a34579a2921ed57cdaa5..9e4028502db78303a6645b3ad2ec18f2
  		if (timed_query) EndSarosDispatchSample(m_context, vk_buffer, timed_query, m_context.GetGpu().GetFrameNum(), program.shader_hash, "indirect");
  		Common::DebugCounters::Add(Common::DebugCounters::Counter::Dispatches);
  		if (rt_pass == 1) {
-@@ -1028,8 +1548,11 @@ void RenderExecutor::DispatchIndirect(CommandBuffer& buffer, uint64_t args_addr,
+@@ -1028,8 +1549,11 @@ void RenderExecutor::DispatchIndirect(CommandBuffer& buffer, uint64_t args_addr,
  		} else if (rt_pass == 2) {
  			RtCheck().AfterGuest(bindings);
  		}
@@ -15809,24 +15775,24 @@ index 332f5cf8405cd560dcc4a34579a2921ed57cdaa5..9e4028502db78303a6645b3ad2ec18f2
  		ResetBindings();
  	};
  	if (RtCheck().Sample(*compute_module, buffer)) {
-@@ -1053,3 +1576,4 @@ void RenderExecutor::DispatchIndirect(CommandBuffer& buffer, uint64_t args_addr,
+@@ -1053,3 +1577,4 @@ void RenderExecutor::DispatchIndirect(CommandBuffer& buffer, uint64_t args_addr,
  }
  
  // Saros-Recomp change notice: Saros-Recomp modified this file for its Windows renderer. Recorded source revision: 2026-11-21. Public source revision: 2026-11-22.
 +// Saros-Recomp modified this file for the experimental Windows renderer on 2026-11-27.
 diff --git a/core/kyty/graphics/host_gpu/renderer/renderContext.cpp b/core/kyty/graphics/host_gpu/renderer/renderContext.cpp
-index 19f183ecb61a39731d49e980cb64b124ce146718..60a108eb53cb7f1906a74ebfb36ef6175c7738b0 100644
+index 19f183ecb61a39731d49e980cb64b124ce146718..90c3332f461522711c4708030b309fb6b4122196 100644
 --- a/core/kyty/graphics/host_gpu/renderer/renderContext.cpp
 +++ b/core/kyty/graphics/host_gpu/renderer/renderContext.cpp
-@@ -2,6 +2,7 @@
- #ifndef NOMINMAX
- #define NOMINMAX
+@@ -4,6 +4,7 @@
  #endif
-+#include "common/frameCensus.h"
  #include <windows.h>
  #endif
++#include "common/frameCensus.h"
  #include "graphics/host_gpu/bdaSubmissionSync.h"
-@@ -123,6 +124,30 @@ VideoOut::VideoOutDriver& RenderContext::GetVideoOut() const {
+ #include "loader/demonsSoulsTitle.h"
+ #include "graphics/host_gpu/renderer/renderContext.h"
+@@ -123,6 +124,34 @@ VideoOut::VideoOutDriver& RenderContext::GetVideoOut() const {
  
  bool RenderContext::HandleFault(PageFaultAccess access, uint64_t fault_vaddr) noexcept {
  	constexpr uint64_t fault_size = 1;
@@ -15839,6 +15805,7 @@ index 19f183ecb61a39731d49e980cb64b124ce146718..60a108eb53cb7f1906a74ebfb36ef617
 +			const auto ns = Common::FrameCensus::Now() - started;
 +			if (gpu_thread) Common::FrameCensus::NoteFault(write, ns);
 +			auto* slot = Common::FrameCensus::ThreadFaultSlot([](char* name, size_t size) {
++#ifdef _WIN32
 +				PWSTR wide = nullptr;
 +				if (SUCCEEDED(GetThreadDescription(GetCurrentThread(), &wide)) && wide != nullptr && wide[0] != 0) {
 +					WideCharToMultiByte(CP_UTF8, 0, wide, -1, name, static_cast<int>(size) - 1, nullptr, nullptr);
@@ -15846,6 +15813,9 @@ index 19f183ecb61a39731d49e980cb64b124ce146718..60a108eb53cb7f1906a74ebfb36ef617
 +					std::snprintf(name, size, "thread %lu", GetCurrentThreadId());
 +				}
 +				if (wide != nullptr) LocalFree(wide);
++#else
++				std::snprintf(name, size, "unnamed thread");
++#endif
 +			});
 +			if (slot == nullptr) return;
 +			(write ? slot->writes : slot->reads).fetch_add(1, std::memory_order_relaxed);
@@ -15857,7 +15827,7 @@ index 19f183ecb61a39731d49e980cb64b124ce146718..60a108eb53cb7f1906a74ebfb36ef617
  	if (access == PageFaultAccess::Execute && LibKernel::Memory::IsGuestExecutable(fault_vaddr) &&
  	    m_page_manager.AllowExecute(fault_vaddr)) {
  		return true;
-@@ -193,7 +218,7 @@ bool RenderContext::WaitWriteBacks(uint64_t vaddr, uint64_t size) {
+@@ -193,7 +222,7 @@ bool RenderContext::WaitWriteBacks(uint64_t vaddr, uint64_t size) {
  			    false);
  			m_command_scheduler.GetMasterSemaphore().Wait(tick);
  		} else {
@@ -15866,7 +15836,7 @@ index 19f183ecb61a39731d49e980cb64b124ce146718..60a108eb53cb7f1906a74ebfb36ef617
  		}
  	}
  	m_command_scheduler.WaitPriorityOperations(tick);
-@@ -317,7 +342,7 @@ void RenderContext::FreedByGame(uint64_t vaddr, uint64_t size) {
+@@ -317,7 +346,7 @@ void RenderContext::FreedByGame(uint64_t vaddr, uint64_t size) {
  		return value != nullptr && (value[0] == '0' || value[0] == '2') ? static_cast<uint32_t>(value[0] - '0') : 1u;
  	}();
  	if (mode == 0 || m_gpu == nullptr || m_gpu->IsStopping() || !GuestRange {vaddr, size}.Valid()) return;
@@ -15875,7 +15845,7 @@ index 19f183ecb61a39731d49e980cb64b124ce146718..60a108eb53cb7f1906a74ebfb36ef617
  		if (!IsMapped(vaddr, size)) return;
  		const auto start = std::chrono::steady_clock::now();
  		static BufferCache::FreeBlockSplits splits;
-@@ -408,6 +433,7 @@ void RenderContext::UnmapMemory(uint64_t vaddr, uint64_t size) {
+@@ -408,6 +437,7 @@ void RenderContext::UnmapMemory(uint64_t vaddr, uint64_t size) {
  		if (m_command_scheduler.Active()) {
  			m_command_scheduler.PopPendingOperations();
  		}
@@ -15883,7 +15853,7 @@ index 19f183ecb61a39731d49e980cb64b124ce146718..60a108eb53cb7f1906a74ebfb36ef617
  		const bool drain = m_command_scheduler.Active() &&
  		                   (m_buffer_cache.IsRegionGpuModified(vaddr, size) ||
  		                    m_texture_cache.HasGpuWrittenImages(vaddr, size) ||
-@@ -420,6 +446,7 @@ void RenderContext::UnmapMemory(uint64_t vaddr, uint64_t size) {
+@@ -420,6 +450,7 @@ void RenderContext::UnmapMemory(uint64_t vaddr, uint64_t size) {
  		const bool registered = size != 0 && m_buffer_cache.IsRegionRegistered(vaddr, size);
  		m_buffer_cache.ForgetCommandBuffers(vaddr, size);
  		m_buffer_cache.InvalidateMemory(vaddr, size);
@@ -15891,7 +15861,7 @@ index 19f183ecb61a39731d49e980cb64b124ce146718..60a108eb53cb7f1906a74ebfb36ef617
  		if (registered) {
  			m_buffer_cache.DeleteUnmappedBuffers(vaddr, size);
  			m_buffer_cache.SplitUnmappedBuffers(vaddr, size);
-@@ -571,19 +598,38 @@ void RenderContext::CacheTlasMemory(const ShaderStageRuntime& runtime) {
+@@ -571,19 +602,38 @@ void RenderContext::CacheTlasMemory(const ShaderStageRuntime& runtime) {
  	}
  }
  
@@ -15941,7 +15911,7 @@ index 19f183ecb61a39731d49e980cb64b124ce146718..60a108eb53cb7f1906a74ebfb36ef617
  		}
  	}
  	if (!SynchronizeDmaReach(stages)) {
-@@ -631,12 +677,19 @@ bool RenderContext::SynchronizeDmaReach(std::span<const ShaderStageRuntime* cons
+@@ -631,12 +681,19 @@ bool RenderContext::SynchronizeDmaReach(std::span<const ShaderStageRuntime* cons
  		}
  		if (!program.info.dma_bounded && program.info.ray_query_reach.empty()) {
  			if (!AddRecordReach(*stage)) {
@@ -15961,7 +15931,7 @@ index 19f183ecb61a39731d49e980cb64b124ce146718..60a108eb53cb7f1906a74ebfb36ef617
  				return false;
  			}
  		}
-@@ -1100,10 +1153,12 @@ bool RenderContext::AddRayTracingReach(const ShaderStageRuntime& runtime) {
+@@ -1100,10 +1157,12 @@ bool RenderContext::AddRayTracingReach(const ShaderStageRuntime& runtime) {
  	if (reach.empty() || reach.size() != 1u + uint64_t {reach[0]} * 2u || !m_ray_tracing->Enabled() ||
  	    !RayTracing::FindGuestTlasSource(program.info, source) ||
  	    !GuestTlasHeader(runtime, source, header, header_at)) {
@@ -15974,7 +15944,7 @@ index 19f183ecb61a39731d49e980cb64b124ce146718..60a108eb53cb7f1906a74ebfb36ef617
  		return false;
  	}
  	const auto add = [&](uint64_t address, uint64_t size) {
-@@ -1122,6 +1177,7 @@ bool RenderContext::AddRayTracingReach(const ShaderStageRuntime& runtime) {
+@@ -1122,6 +1181,7 @@ bool RenderContext::AddRayTracingReach(const ShaderStageRuntime& runtime) {
  		for (const auto blas: *list) {
  			uint64_t size = 0;
  			if (!GuestBlasMemory(blas, size)) {
@@ -15982,7 +15952,7 @@ index 19f183ecb61a39731d49e980cb64b124ce146718..60a108eb53cb7f1906a74ebfb36ef617
  				return false;
  			}
  			add(blas, size);
-@@ -1133,11 +1189,13 @@ bool RenderContext::AddRayTracingReach(const ShaderStageRuntime& runtime) {
+@@ -1133,11 +1193,13 @@ bool RenderContext::AddRayTracingReach(const ShaderStageRuntime& runtime) {
  		const auto table    = reach[2u + test * 2u];
  		ShaderBufferResource table_vsharp;
  		if (material >= buffers.size() || !RayQueryTableVsharp(runtime, table, table_vsharp)) {
@@ -15996,7 +15966,7 @@ index 19f183ecb61a39731d49e980cb64b124ce146718..60a108eb53cb7f1906a74ebfb36ef617
  			return false;
  		}
  	}
-@@ -1255,6 +1313,7 @@ void RenderContext::SynchronizeDirtyBdaRegions(GuestRange range) {
+@@ -1255,6 +1317,7 @@ void RenderContext::SynchronizeDirtyBdaRegions(GuestRange range) {
  }
  
  void RenderContext::PrepareBda(bool may_write, bool full_sync) {
@@ -16004,7 +15974,7 @@ index 19f183ecb61a39731d49e980cb64b124ce146718..60a108eb53cb7f1906a74ebfb36ef617
  	[[maybe_unused]] static const bool logged = [] {
  		Log::WriteToConsoleAndLog("GPU: using buffer device address (BDA) shader memory access.\n");
  		return true;
-@@ -1264,6 +1323,7 @@ void RenderContext::PrepareBda(bool may_write, bool full_sync) {
+@@ -1264,6 +1327,7 @@ void RenderContext::PrepareBda(bool may_write, bool full_sync) {
  		m_buffer_cache.NoteDeviceAddressUse();
  	}
  	if (BdaRegionsMode() != 0 && full_sync) {
@@ -16012,7 +15982,7 @@ index 19f183ecb61a39731d49e980cb64b124ce146718..60a108eb53cb7f1906a74ebfb36ef617
  		std::shared_lock regions_lock(m_mapped_ranges_mutex);
  		RefreshBdaRanges();
  		m_bda_mapped_since_sync.clear();
-@@ -1293,6 +1353,7 @@ void RenderContext::PrepareBda(bool may_write, bool full_sync) {
+@@ -1293,6 +1357,7 @@ void RenderContext::PrepareBda(bool may_write, bool full_sync) {
  		m_bda_mapped_since_sync.clear();
  		if (skip) {
  			if (!stale.empty()) {
@@ -16020,7 +15990,7 @@ index 19f183ecb61a39731d49e980cb64b124ce146718..60a108eb53cb7f1906a74ebfb36ef617
  				BdaSubmissionSync::stale_only = &stale;
  				m_buffer_cache.SynchronizeBuffersInRanges(m_mapped_ranges, false);
  			}
-@@ -1304,7 +1365,17 @@ void RenderContext::PrepareBda(bool may_write, bool full_sync) {
+@@ -1304,7 +1369,17 @@ void RenderContext::PrepareBda(bool may_write, bool full_sync) {
  			(!BdaSubmissionSync::Enabled() ? BdaSubmissionSync::passes_off
  			                               : overflow || lost ? BdaSubmissionSync::passes_lost : BdaSubmissionSync::passes_later)
  			    .fetch_add(1, std::memory_order_relaxed);
@@ -16039,7 +16009,7 @@ index 19f183ecb61a39731d49e980cb64b124ce146718..60a108eb53cb7f1906a74ebfb36ef617
  			m_bda_sync_epochs               = epochs;
  			BdaSubmissionSync::last_pass_ns = started;
  		}
-@@ -1313,6 +1384,27 @@ void RenderContext::PrepareBda(bool may_write, bool full_sync) {
+@@ -1313,6 +1388,27 @@ void RenderContext::PrepareBda(bool may_write, bool full_sync) {
  	m_use_scan_pending      = true;
  }
  
@@ -16067,7 +16037,7 @@ index 19f183ecb61a39731d49e980cb64b124ce146718..60a108eb53cb7f1906a74ebfb36ef617
  void RenderContext::RunGarbageCollector() {
  	m_frame_number++;
  	if (m_fault_process_pending) {
-@@ -1392,3 +1484,4 @@ void RenderContext::TriggerInterrupt(int event_id, uint32_t context_id) {
+@@ -1392,3 +1488,4 @@ void RenderContext::TriggerInterrupt(int event_id, uint32_t context_id) {
  }
  
  // Saros-Recomp change notice: Saros-Recomp modified this file for its Windows renderer. Recorded source revisions: 2026-11-21, 2026-11-22. Public source revision: 2026-11-22.
@@ -16093,7 +16063,7 @@ index 1de2516b775f5762a4ebda58ceacbb32b98790e2..fbcb61322f83b8cda4f51952d9a2c418
 +
 +// Saros-Recomp modified this file for the experimental Windows renderer on 2026-11-27.
 diff --git a/core/kyty/graphics/host_gpu/renderer/renderDraw.cpp b/core/kyty/graphics/host_gpu/renderer/renderDraw.cpp
-index 5805812a25c68e2ba47339f1172529cbbe2794d7..7df859db63729a2d05869974e55b7e190d93171b 100644
+index 5805812a25c68e2ba47339f1172529cbbe2794d7..e7bc699278150d3beaac10b206f2fd7c429c28de 100644
 --- a/core/kyty/graphics/host_gpu/renderer/renderDraw.cpp
 +++ b/core/kyty/graphics/host_gpu/renderer/renderDraw.cpp
 @@ -1,3 +1,4 @@
@@ -16110,7 +16080,7 @@ index 5805812a25c68e2ba47339f1172529cbbe2794d7..7df859db63729a2d05869974e55b7e19
  
  	std::array<ResolvedDraw, Size> draws;
  	size_t                         next = 0;
-@@ -538,13 +539,187 @@ void RenderExecutor::ReleaseResolvedDraw(ResolvedDraw* resolved) noexcept {
+@@ -538,13 +539,179 @@ void RenderExecutor::ReleaseResolvedDraw(ResolvedDraw* resolved) noexcept {
  bool RenderExecutor::ResolvedDrawWritesBuffers(const ResolvedDraw& resolved) {
  	for (uint32_t i = 0; i < resolved.programs.stages; i++) {
  		const auto* plan = resolved.programs.plans[i];
@@ -16212,16 +16182,8 @@ index 5805812a25c68e2ba47339f1172529cbbe2794d7..7df859db63729a2d05869974e55b7e19
 +			if (desc.dword_count != 8u && (!sound_v2 || desc.dword_count != 4u)) {
 +				return ResolvedWriteStatus::BadImgDesc;
 +			}
-+			const uint64_t base = ((uint64_t {desc.dwords[0]} | (uint64_t {desc.dwords[1]} << 32u)) & 0xFFFFFFFFFFull) << 8u;
-+			if (base != 0) {
-+				const uint64_t w = uint64_t {((desc.dwords[1] >> 30u) & 0x3u) | (((desc.dwords[2] >> 0u) & 0xFFFu) << 2u)} + 1u;
-+				const uint64_t h = uint64_t {(desc.dwords[2] >> 14u) & 0x3FFFu} + 1u;
-+				const uint64_t layers = desc.dword_count == 8u
-+				                            ? std::max<uint64_t>(uint64_t {desc.dwords[4] & 0x1FFFu} + 1u, 1u)
-+				                            : 1u;
-+				const uint64_t est = std::clamp<uint64_t>(w * h * layers * 32u, 4ull << 20u, 256ull << 20u);
-+				out_ranges.push_back({base, base + est});
-+			}
++			// Descriptor dimensions alone do not bound the memory covered by a tiled image.
++			return ResolvedWriteStatus::BadImgDesc;
 +		}
 +		return ResolvedWriteStatus::Clean;
 +	};
@@ -16299,7 +16261,7 @@ index 5805812a25c68e2ba47339f1172529cbbe2794d7..7df859db63729a2d05869974e55b7e19
  RenderExecutor::ResolvedDraw* RenderExecutor::WaitResolvedDraw(ResolvedDraw* resolved) noexcept {
  	auto state = resolved->state.load(std::memory_order_acquire);
  	for (Common::SpinWait wait; state == ResolvedDraw::Pending;
-@@ -859,9 +1034,20 @@ RenderState RenderExecutor::AcquireRenderTargets(CommandBuffer& buffer, RenderCo
+@@ -859,9 +1026,23 @@ RenderState RenderExecutor::AcquireRenderTargets(CommandBuffer& buffer, RenderCo
  		attachment.image_layout = layout;
  	}
  	if (depth.image_id) {
@@ -16313,15 +16275,18 @@ index 5805812a25c68e2ba47339f1172529cbbe2794d7..7df859db63729a2d05869974e55b7e19
 +			skip_depth_refresh   = depth.depth_clear_enable || meta_clear;
 +			skip_stencil_refresh = depth.stencil_clear_enable || (meta_clear && metadata.stencil_compressed);
 +		}
++		const vk::Extent2D render_extent {std::min(state.width, depth.desc.info.extent.width),
++		                                  std::min(state.height, depth.desc.info.extent.height)};
++		const auto render_layers = std::min(state.num_layers, depth.desc.view_info.layer_count);
  		const auto image_view =
  		    memo != nullptr ? memo->depth_view
 -		                    : cache.FindDepthTarget(depth.image_id, depth.desc, &stencil_id);
-+		                    : cache.FindDepthTarget(depth.image_id, depth.desc, &stencil_id,
-+		                                            skip_depth_refresh, skip_stencil_refresh);
++		                    : cache.FindDepthTarget(depth.image_id, depth.desc, &stencil_id, render_extent,
++		                                            render_layers, skip_depth_refresh, skip_stencil_refresh);
  		depth_view = image_view;
  		if (memo == nullptr) {
  			const auto& metadata = depth.desc.info.metadata;
-@@ -985,8 +1171,21 @@ RenderState RenderExecutor::AcquireRenderTargets(CommandBuffer& buffer, RenderCo
+@@ -985,8 +1166,21 @@ RenderState RenderExecutor::AcquireRenderTargets(CommandBuffer& buffer, RenderCo
  	}
  	if (color_count == 0 && !depth.image_id) {
  		const auto& limits = buffer.GetGraphics().GetPhysicalDeviceProperties().limits;
@@ -16345,7 +16310,7 @@ index 5805812a25c68e2ba47339f1172529cbbe2794d7..7df859db63729a2d05869974e55b7e19
  	}
  	if (state.num_layers == std::numeric_limits<uint32_t>::max()) {
  		state.num_layers = 1;
-@@ -1493,8 +1692,19 @@ RenderExecutor::ResolvedDraw* RenderExecutor::ResolveIndirectDispatchAhead(
+@@ -1493,8 +1687,19 @@ RenderExecutor::ResolvedDraw* RenderExecutor::ResolveIndirectDispatchAhead(
  bool RenderExecutor::TakeResolvedDispatch(ShaderComputeInputInfo& input_info,
                                            const ShaderModule*&    module) {
  	auto* resolved = std::exchange(m_resolved_draw, nullptr);
@@ -16367,7 +16332,7 @@ index 5805812a25c68e2ba47339f1172529cbbe2794d7..7df859db63729a2d05869974e55b7e19
  		return false;
  	}
  	input_info = resolved->compute;
-@@ -2065,7 +2275,36 @@ void RenderExecutor::ExecutePreparedDraw(CommandBuffer& buffer, const DrawCallIn
+@@ -2065,7 +2270,36 @@ void RenderExecutor::ExecutePreparedDraw(CommandBuffer& buffer, const DrawCallIn
  		ShaderWriteHazardBarrier(vk_buffer, shader_write_stages);
  	}
  	buffer.BeginRendering(rendering);
@@ -16404,7 +16369,7 @@ index 5805812a25c68e2ba47339f1172529cbbe2794d7..7df859db63729a2d05869974e55b7e19
  	if (mesh_task) {
  		vk_buffer.drawMeshTasksEXT(emit.indirect.count, 1, 1);
  	} else if (mesh_active) {
-@@ -2098,6 +2337,11 @@ void RenderExecutor::ExecutePreparedDraw(CommandBuffer& buffer, const DrawCallIn
+@@ -2098,6 +2332,11 @@ void RenderExecutor::ExecutePreparedDraw(CommandBuffer& buffer, const DrawCallIn
  		vk_buffer.drawIndirect(args_buffer.first->Handle(), args_buffer.second,
  		                       emit.indirect.count, emit.indirect.stride);
  	}
@@ -16416,7 +16381,7 @@ index 5805812a25c68e2ba47339f1172529cbbe2794d7..7df859db63729a2d05869974e55b7e19
  	Common::DebugCounters::Add(Common::DebugCounters::Counter::Draws);
  	Common::DebugCounters::Add(Common::DebugCounters::Counter::DrawInstances, draw.instance_count);
  
-@@ -2379,3 +2623,4 @@ bool RenderExecutor::ResolveColorTargets(CommandBuffer& buffer) {
+@@ -2379,3 +2618,4 @@ bool RenderExecutor::ResolveColorTargets(CommandBuffer& buffer) {
  }
  
  // Saros-Recomp change notice: Saros-Recomp modified this file for its Windows renderer. Recorded source revision: 2026-11-21. Public source revision: 2026-11-22.

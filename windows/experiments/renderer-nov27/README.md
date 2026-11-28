@@ -33,7 +33,7 @@ git -C source -c core.autocrlf=false apply --whitespace=nowarn "$patch"
 if ($LASTEXITCODE) { throw "Patch application failed" }
 ```
 
-The ZIP SHA-256 is `1a17a4dfc996aeb85307777284e3788f8baf3e9b4c9b31713f236f601876ba6b`. The patch SHA-256 is `7be0cebb9e9a4782fc5f527aab498590ba3754dc86d47579a72000e4dedb3f90`. Follow the kit's **Build tools** section to set `LLVM_BIN` and `TOOLS_BIN` and prepare `$glslang` and `$validator`. From the extracted directory, build and test the patched renderer.
+The ZIP SHA-256 is `1a17a4dfc996aeb85307777284e3788f8baf3e9b4c9b31713f236f601876ba6b`. The patch SHA-256 is `d1db1d4e373a0e253c7de236058470024227797eb3a14516e975fe3d617dd26d`. Follow the kit's **Build tools** section to set `LLVM_BIN` and `TOOLS_BIN` and prepare `$glslang` and `$validator`. From the extracted directory, build and test the patched renderer.
 
 ```powershell
 python -B build.py --work . --llvm-bin "$env:LLVM_BIN" --tools-bin "$env:TOOLS_BIN" --glslang "$glslang" --jobs 8
@@ -41,12 +41,16 @@ python -B check.py .
 python -B check_shader.py . --validator "$validator"
 ```
 
-## Checks on the published patch
+## Initial rebuild and gameplay capture
 
-A clean rebuild produced `kyty_gpu.prx` with SHA-256 `3a8dcee145eb6a7bc296ef71ec843838c5aa25f433673eef0e37bfed19ed1526`. It passed ABI and shader-module forwarding tests, generated two valid synthetic compute shaders, and rejected a malformed module.
+The initial source snapshot produced `kyty_gpu.prx` with SHA-256 `3a8dcee145eb6a7bc296ef71ec843838c5aa25f433673eef0e37bfed19ed1526`. It passed ABI and shader-module forwarding tests, generated two valid synthetic compute shaders, and rejected a malformed module.
 
 The first launch started with an empty cache. It recorded 850 flips and ended without a completed route report. A second launch reused that cache, enabled swapchain capture and used the x28 settings with the shader cache stamp override removed. It completed both routes at **55.44 FPS**, recorded movement on each and exited normally with zero telemetry drops. This single capture run used a different cache and binary from the three-run comparison above. [Rebuild measurements](measurements.json)
 
 ![Rebuilt renderer during the tight turn at flip 2800 and the wide turn at flip 3700](rebuilt-routes.jpg)
 
-Static review found a compute barrier that can be lost after a zero-sized dispatch, and Win32 thread APIs outside a platform guard in the fault census. These findings remain open in this experimental snapshot.
+## Review fixes
+
+The published patch preserves a pending guest compute barrier across empty dispatches and guards Windows-specific fault and readback tracing. It falls back to full command-fetch ordering when write ranges cannot be established, keeps the graphics semaphore wait for transfer readbacks, and limits the depth upload shortcut to full clears. It also drops the speculative target-refresh shortcut and corrects the query resets used for GPU timing. [Vulkan command-buffer query reset](https://docs.vulkan.org/refpages/latest/refpages/source/vkCmdResetQueryPool.html) · [Vulkan host query reset](https://docs.vulkan.org/refpages/latest/refpages/source/vkResetQueryPool.html)
+
+The historical throughput and gameplay captures above identify their original binaries. The current build and its checks are recorded in the run data. [Build and benchmark measurements](measurements.json)
